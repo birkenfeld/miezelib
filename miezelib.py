@@ -218,7 +218,8 @@ class Data(object):
                             gb -= bkgrd['B'] * cfg
                             gc = ga/gb
                             gdc = (graph['delta A'] + bkgrd['delta A']*cfg +
-                                   gc*(graph['delta B'] + bkgrd['delta B']*cfg))/(graph['B'] - bkgrd['B']*cfg)
+                                   gc*(graph['delta B'] + bkgrd['delta B']*cfg))/\
+                                  (graph['B'] - bkgrd['B']*cfg)
                         dc = (c/gc)*(dc/c + gdc/gc)
                         c = c/gc
                     y, dy = c, dc
@@ -289,9 +290,9 @@ class Data(object):
                 vfit = list(out.beta)
                 errors = list(out.sd_beta)
                 if 1 <= out.info <= 3:
-                    ndf = len(x) - 2
+                    ndf = len(x) #- 2
                     # chi2 is sum of (square of deviation / ideal value)
-                    chi2 = sum(power(self.model(vfit, x) - y, 2) /
+                    chi2 = sum(power(self.model(vfit, x)*ndf - y, 2) /
                                self.model(vfit, x))
                     # chi2/ndf; ndf is (# points - # fit parameters)
                     chi2norm = chi2/ndf

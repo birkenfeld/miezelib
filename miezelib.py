@@ -161,9 +161,14 @@ class Data(object):
                 graph and fn(graph) or '',
                 bkgrd and fn(bkgrd) or '')
 
-    def process(self, ycol='C', dpoints=ALL):
+    def process(self, ycol='C', dpoints=ALL, dpointrange=None):
         if dpoints is ALL:
-            dpoints = sorted(self.mess.keys())
+            if dpointrange is not None:
+                dmin, dmax = dpointrange
+                dpoints = sorted(k for k in self.mess.keys()
+                                 if dmin <= k <= dmax)
+            else:
+                dpoints = sorted(self.mess.keys())
         curves = []
         for dpoint in dpoints:
             xydy = []
@@ -247,12 +252,13 @@ class Data(object):
 
         if subplots:
             fig.subplots_adjust(wspace=0.3)
-            nrows = ceil(len(curves)/2.)
+            ncols = len(curves) >= 9 and 3 or 2
+            nrows = ceil(len(curves)/float(ncols))
 
         for j, (xydy, label) in enumerate(curves):
             # setup plot
             if subplots:
-                ax = fig.add_subplot(nrows, 2, j+1)
+                ax = fig.add_subplot(nrows, ncols, j+1)
                 ax.set_title(label)
             else:
                 ax = fig.gca()
@@ -290,10 +296,10 @@ class Data(object):
                 vfit = list(out.beta)
                 errors = list(out.sd_beta)
                 if 1 <= out.info <= 3:
-                    ndf = len(x) #- 2
+                    ndf = len(x) - 2
                     # chi2 is sum of (square of deviation / ideal value)
-                    chi2 = sum(power(self.model(vfit, x)*ndf - y, 2) /
-                               self.model(vfit, x))
+                    chi2 = sum(power(self.model(vfit, x) - y, 2) /
+                               power(dy, 2))
                     # chi2/ndf; ndf is (# points - # fit parameters)
                     chi2norm = chi2/ndf
                     fx = linspace(x[0], x[-1], 1000)

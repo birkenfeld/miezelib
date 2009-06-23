@@ -5,7 +5,12 @@ from os import path
 from pylab import *
 from numpy import *
 
-base = sys.argv[1]
+try:
+    base = sys.argv[1]
+except:
+    print 'Usage: plot_pickups.py directory'
+    print '  (all files and directories under "directory" are searched)'
+    sys.exit()
 
 pas = {}
 

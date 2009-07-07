@@ -246,8 +246,8 @@ class Data(object):
 
     MARKERS = ['o', '^', 's', 'D', 'v']
 
-    def plot(self, fig, fit=False, color='r', ylabel=None, bycat=False,
-             subplots=False, lines=False, **kwds):
+    def plot(self, fig, fit=True, color=None, ylabel=None, bycat=True,
+             subplots=True, lines=False, **kwds):
         curves = self.process(**kwds)
 
         if subplots:
@@ -255,19 +255,25 @@ class Data(object):
             ncols = len(curves) >= 9 and 3 or 2
             nrows = ceil(len(curves)/float(ncols))
 
+        lastrow = True
+        firstcol = True
         for j, (xydy, label) in enumerate(curves):
             # setup plot
             if subplots:
                 ax = fig.add_subplot(nrows, ncols, j+1)
                 ax.set_title(label)
+                lastrow = j >= len(curves) - ncols
+                firstcol = j % ncols == 0
             else:
                 ax = fig.gca()
-            ax.set_xlabel('$\\tau_{MIEZE}$ / ps')
-            if ylabel is not None:
-                ax.set_ylabel(ylabel)
-            else:
-                ax.set_ylabel(kwds.get('ycol', 'C') +
-                              (self.norm and ' (norm)' or ''))
+            if lastrow:
+                ax.set_xlabel('$\\tau_{MIEZE}$ / ps')
+            if firstcol:
+                if ylabel is not None:
+                    ax.set_ylabel(ylabel)
+                else:
+                    ax.set_ylabel(kwds.get('ycol', 'C') +
+                                  (self.norm and ' (norm)' or ''))
 
             # plot data
             x, _, y, dy, sf = map(array, zip(*xydy))
@@ -306,16 +312,21 @@ class Data(object):
                     fy = self.model(vfit, fx)
                     ax.plot(fx, fy, 'm-', label='exp. fit')
                     gamma = abs(vfit[1]) * 1000 # in 1/ns
+                    if gamma < 0.03:
+                        gamma = 0
                     gamma_s = self.format_num_latex(gamma, 2)
                     gamerr_s = self.format_num_latex(errors[1]*1000, 2)
                     gamma_muev_s = self.format_num_latex(gamma * 0.657, 2)
                     gamerr_muev_s = self.format_num_latex(errors[1] * 657, 2)
                     chi2norm_s = self.format_num_latex(chi2norm, 2)
-                    text = (r'$\Gamma = %s\,\mathrm{ns}^{-1} \hat{=}\, '
-                            r'%s\,\mathrm{\mu eV}$' '\n'
-                            r'$\chi^2/\mathrm{ndf} = %s$'
-                            % (gamma_s, gamma_muev_s, chi2norm_s))
-                    ax.text(0.03, 0.03, text, size='x-large',
+                    if gamma == 0:
+                        text = r'$\Gamma = 0$'
+                    else:
+                        text = (r'$\Gamma = %s\,\mathrm{ns}^{-1}$''\n'r'$\hat{=}\, '
+                                r'%s\,\mathrm{\mu eV}$' % (gamma_s, gamma_muev_s)
+                                #+ '\n' r'$\chi^2/\mathrm{ndf} = %s$' % chi2norm_s
+                                )
+                    ax.text(0.03, 0.03, text, size='large',
                             transform=ax.transAxes)
             ax.set_ylim(ymin=0)
 

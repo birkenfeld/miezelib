@@ -211,8 +211,8 @@ class Data(object):
                     dc = point.get('delta C', 0)
                     c = a/b
                     if bkgrd:
-                        bkgrd['delta A'] = 0
-                        bkgrd['delta B'] = 0
+                        #bkgrd['delta A'] = 0
+                        #bkgrd['delta B'] = 0
                         a -= bkgrd['A'] * cf
                         b -= bkgrd['B'] * cf
                         c = a/b

@@ -172,15 +172,17 @@ class Data(object):
         curves = []
         for dpoint in dpoints:
             xydy = []
-            for x, p in self.mess[dpoint].items():
+            for x, point in self.mess[dpoint].items():
+                cat = point.get('cat')
                 graph = self.norm.get(x)
                 bkgrd = self.back.get(x)
+                files = self._filenames(point, graph, bkgrd)
                 # correction factor for time-dependent measurement values
-                cf = bkgrd and p['preset']/bkgrd['preset'] or 1
+                cf = bkgrd and point['preset']/bkgrd['preset'] or 1
                 # and for graphite values
                 cfg = (graph and bkgrd) and graph['preset']/bkgrd['preset'] or 1
                 if ycol == 'sum':
-                    c, m = p['countsum'], p['monitor']
+                    c, m = point['countsum'], point['monitor']
                     y = c/m
                     dy = y*(1/sqrt(c) + 1/sqrt(m))
                     if bkgrd:
@@ -189,31 +191,35 @@ class Data(object):
                         y -= cb/mb
                         dy += y*(1/sqrt(cb) + 1/sqrt(mb))
                 elif ycol == 'A':
-                    y = p['A']
-                    dy = p.get('delta A', 0)
+                    y = point['A']
+                    dy = point.get('delta A', 0)
                     if bkgrd:
                         y -= bkgrd['A'] * cf
                         dy += bkgrd['delta A'] * cf
-                    y /= p['preset']
-                    dy /= p['preset']
+                    y /= point['preset']
+                    dy /= point['preset']
                 elif ycol == 'B':
-                    y = p['B']
-                    dy = p.get('delta B', 0)
+                    y = point['B']
+                    dy = point.get('delta B', 0)
                     if bkgrd:
                         y -= bkgrd['B'] * cf
                         dy += bkgrd.get('delta B', 0) * cf
-                    y /= p['preset']
-                    dy /= p['preset']
+                    y /= point['preset']
+                    dy /= point['preset']
                 elif ycol == 'C':
-                    a, b = p['A'], p['B']
-                    dc = p.get('delta C', 0)
+                    a, b = point['A'], point['B']
+                    dc = point.get('delta C', 0)
                     c = a/b
                     if bkgrd:
+                        bkgrd['delta A'] = 0
+                        bkgrd['delta B'] = 0
                         a -= bkgrd['A'] * cf
                         b -= bkgrd['B'] * cf
                         c = a/b
-                        dc = (p['delta A'] + bkgrd['delta A']*cf +
-                              c*(p['delta B'] + bkgrd['delta B']*cf))/(p['B'] - bkgrd['B']*cf)
+                        print point['delta A'], bkgrd['delta A']*cf
+                        da = point['delta A'] + bkgrd['delta A']*cf
+                        db = point['delta B'] + bkgrd['delta B']*cf
+                        dc = c * (da/a + db/b)
                     if graph:
                         ga, gb = graph['A'], graph['B']
                         gdc = graph['delta C']
@@ -222,13 +228,13 @@ class Data(object):
                             ga -= bkgrd['A'] * cfg
                             gb -= bkgrd['B'] * cfg
                             gc = ga/gb
-                            gdc = (graph['delta A'] + bkgrd['delta A']*cfg +
-                                   gc*(graph['delta B'] + bkgrd['delta B']*cfg))/\
-                                  (graph['B'] - bkgrd['B']*cfg)
+                            gda = graph['delta A'] + bkgrd['delta A']*cfg
+                            gdb = graph['delta B'] + bkgrd['delta B']*cfg
+                            gdc = gc * (gda/ga + gdb/gb)
                         dc = (c/gc)*(dc/c + gdc/gc)
                         c = c/gc
                     y, dy = c, dc
-                xydy.append((x, p['cat'], y, dy, self._filenames(p, graph, bkgrd)))
+                xydy.append((x, y, dy, files, cat))
             xydy.sort()
             data = [xydy, '%s %s' % (dpoint, self.unit)]
             curves.append(data)
@@ -276,7 +282,7 @@ class Data(object):
                                   (self.norm and ' (norm)' or ''))
 
             # plot data
-            x, _, y, dy, sf = map(array, zip(*xydy))
+            x, y, dy, sf, _ = map(array, zip(*xydy))
             kwds = {'picker': 5, 'ls': lines and 'solid' or ''}
             if color is not None:
                 kwds['color'] = color
@@ -285,10 +291,10 @@ class Data(object):
                 self.collections[coll[0]] = sf
             else:
                 # sort by category
-                xydy.sort(key=lambda v: v[1])
+                xydy.sort(key=lambda v: v[4])
                 for catmarker, (catname, catxydy) in \
-                        izip(cycle(self.MARKERS), groupby(xydy, lambda v: v[1])):
-                    cx, _, cy, cdy, csf = map(array, zip(*catxydy))
+                        izip(cycle(self.MARKERS), groupby(xydy, lambda v: v[4])):
+                    cx, cy, cdy, csf, _ = map(array, zip(*catxydy))
                     catlabel = '%s %s' % (label, catname)
                     coll = ax.errorbar(cx, cy, cdy, label=catlabel,
                                        marker=catmarker, **kwds)

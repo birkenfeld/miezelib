@@ -169,19 +169,22 @@ class Fit(object):
                 return self.result(name, 'leastsq', x, y, dy, out[0],
                                    parerrors=[0]*len(out[0]))
             else:
-                return FitResult(_name=self.name, _failed=True)
+                return self.result(name, None, x, y, dy, None, None)
 
     def result(self, name, method, x, y, dy, parvalues, parerrors):
-        dct = {'_name': name, '_method': method, '_failed': False,
-               '_pars': (self.parnames, parvalues, parerrors)}
-        for name, val, err in zip(self.parnames, parvalues, parerrors):
-            dct[name] = val
-            dct['d' + name] = err
-        dct['curve_x'] = linspace(x[0], x[-1], 1000)
-        dct['curve_y'] = self.model(parvalues, dct['curve_x'])
-        ndf = len(x) - len(parvalues)
-        residuals = self.model(parvalues, x) - y
-        dct['chi2'] = sum(power(residuals, 2) / power(dy, 2)) / ndf
+        if method is None:
+            dct = {'_name': name, '_failed': True}
+        else:
+            dct = {'_name': name, '_method': method, '_failed': False,
+                   '_pars': (self.parnames, parvalues, parerrors)}
+            for name, val, err in zip(self.parnames, parvalues, parerrors):
+                dct[name] = val
+                dct['d' + name] = err
+            dct['curve_x'] = linspace(x[0], x[-1], 1000)
+            dct['curve_y'] = self.model(parvalues, dct['curve_x'])
+            ndf = len(x) - len(parvalues)
+            residuals = self.model(parvalues, x) - y
+            dct['chi2'] = sum(power(residuals, 2) / power(dy, 2)) / ndf
         result = FitResult(**dct)
         dprint(result)
         return result
@@ -192,11 +195,86 @@ class Fit(object):
 class MiezeMeasurement(object):
     """Container for a single MIEZE measurement (multiple MIEZE times)."""
 
-    def __init__(self, points, varvalue, unit):
-        self.points = sorted(points)
+    def __init__(self, ycol, varvalue, unit):
         self.varvalue = varvalue
         self.unit = unit
+        self._calc_point = getattr(self, '_calc_point_' + ycol)
+
+        self.points = []
         self.arrays = None
+
+    def add_point(self, x, point, graph, bkgrd, files):
+        y, dy = self._calc_point(point, graph, bkgrd)
+        self.points.append((x, y, dy, files, point.get('group')))
+
+    def _calc_point_sum(self, point, graph, bkgrd):
+        c, m = point['countsum'], point['monitor']
+        y = c/m
+        dy = y*(1/sqrt(c) + 1/sqrt(m))
+        if bkgrd:
+            cb = bkgrd['countsum']
+            mb = bkgrd['monitor']
+            y -= cb/mb
+            dy += y*(1/sqrt(cb) + 1/sqrt(mb))
+        return y, dy
+
+    def _calc_point_A(self, point, graph, bkgrd):
+        # correction factor for time-dependent measurement values
+        cf = bkgrd and point['preset']/bkgrd['preset'] or 1
+        y = point['A']
+        dy = point.get('delta A', 0)
+        if bkgrd:
+            y -= bkgrd['A'] * cf
+            dy += bkgrd['delta A'] * cf
+        y /= point['preset']
+        dy /= point['preset']
+        return y, dy
+
+    def _calc_point_B(self, point, graph, bkgrd):
+        # correction factor for time-dependent measurement values
+        cf = bkgrd and point['preset']/bkgrd['preset'] or 1
+        y = point['B']
+        dy = point.get('delta B', 0)
+        if bkgrd:
+            y -= bkgrd['B'] * cf
+            dy += bkgrd.get('delta B', 0) * cf
+        y /= point['preset']
+        dy /= point['preset']
+        return y, dy
+
+    def _calc_point_C(self, point, graph, bkgrd):
+        # correction factor for time-dependent measurement values
+        cf = bkgrd and point['preset']/bkgrd['preset'] or 1
+        # and for graphite values
+        cfg = (graph and bkgrd) and graph['preset']/bkgrd['preset'] or 1
+
+        a, b = point['A'], point['B']
+        dc = point.get('delta C', 0)
+        c = a/b
+        if bkgrd:
+            #bkgrd['delta A'] = 0
+            #bkgrd['delta B'] = 0
+            a -= bkgrd['A'] * cf
+            b -= bkgrd['B'] * cf
+            c = a/b
+            #print point['delta A'], bkgrd['delta A']*cf
+            da = point['delta A'] + bkgrd['delta A']*cf
+            db = point['delta B'] + bkgrd['delta B']*cf
+            dc = c * (da/a + db/b)
+        if graph:
+            ga, gb = graph['A'], graph['B']
+            gdc = graph['delta C']
+            gc = ga/gb
+            if bkgrd:
+                ga -= bkgrd['A'] * cfg
+                gb -= bkgrd['B'] * cfg
+                gc = ga/gb
+                gda = graph['delta A'] + bkgrd['delta A']*cfg
+                gdb = graph['delta B'] + bkgrd['delta B']*cfg
+                gdc = gc * (gda/ga + gdb/gb)
+            dc = (c/gc)*(dc/c + gdc/gc)
+            c = c/gc
+        return c, dc
 
     @property
     def label(self):
@@ -205,7 +283,7 @@ class MiezeMeasurement(object):
     def as_arrays(self):
         if self.arrays:
             return self.arrays
-        self.arrays = map(array, zip(*self.points))
+        self.arrays = map(array, zip(*sorted(self.points)))
         return self.arrays
 
     def as_arrays_bygroup(self):
@@ -216,7 +294,8 @@ class MiezeMeasurement(object):
             yield groupname, gx, gy, gdy, gsf
 
     def _fit_model(self, v, x):
-        return v[1]*exp(-abs(v[0])*x)
+        # to get gamma in mueV, conversion factor is hbar = 657 mueV*ps
+        return v[1]*exp(-abs(v[0])*x/657.)
 
     def fit(self, name=None):
         name = '%s %s' % (name or '', self.label)
@@ -224,9 +303,7 @@ class MiezeMeasurement(object):
         res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1]).run(name, x, y, dy)
         if not res:
             return None
-        # gamma is in ps^-1, conversion factor is hbar = 657 mueV*ps
-        res.Gamma = abs(res.Gamma) * 657
-        res.dGamma = res.dGamma * 657
+        res.Gamma = abs(res.Gamma)
         return res
 
 
@@ -325,83 +402,26 @@ class MiezeData(object):
                 varvalues = sorted(self.mess.keys())
         measurements = []
         for varvalue in varvalues:
-            points = []
+            measurement = MiezeMeasurement(ycol, varvalue, self.unit)
             for x, point in self.mess[varvalue].items():
-                group = point.get('group')
                 graph = self.norm.get(x)
                 bkgrd = self.back.get(x)
                 files = self._filenames(point, graph, bkgrd)
-                # correction factor for time-dependent measurement values
-                cf = bkgrd and point['preset']/bkgrd['preset'] or 1
-                # and for graphite values
-                cfg = (graph and bkgrd) and graph['preset']/bkgrd['preset'] or 1
-                if ycol == 'sum':
-                    c, m = point['countsum'], point['monitor']
-                    y = c/m
-                    dy = y*(1/sqrt(c) + 1/sqrt(m))
-                    if bkgrd:
-                        cb = bkgrd['countsum']
-                        mb = bkgrd['monitor']
-                        y -= cb/mb
-                        dy += y*(1/sqrt(cb) + 1/sqrt(mb))
-                elif ycol == 'A':
-                    y = point['A']
-                    dy = point.get('delta A', 0)
-                    if bkgrd:
-                        y -= bkgrd['A'] * cf
-                        dy += bkgrd['delta A'] * cf
-                    y /= point['preset']
-                    dy /= point['preset']
-                elif ycol == 'B':
-                    y = point['B']
-                    dy = point.get('delta B', 0)
-                    if bkgrd:
-                        y -= bkgrd['B'] * cf
-                        dy += bkgrd.get('delta B', 0) * cf
-                    y /= point['preset']
-                    dy /= point['preset']
-                elif ycol == 'C':
-                    a, b = point['A'], point['B']
-                    dc = point.get('delta C', 0)
-                    c = a/b
-                    if bkgrd:
-                        #bkgrd['delta A'] = 0
-                        #bkgrd['delta B'] = 0
-                        a -= bkgrd['A'] * cf
-                        b -= bkgrd['B'] * cf
-                        c = a/b
-                        #print point['delta A'], bkgrd['delta A']*cf
-                        da = point['delta A'] + bkgrd['delta A']*cf
-                        db = point['delta B'] + bkgrd['delta B']*cf
-                        dc = c * (da/a + db/b)
-                    if graph:
-                        ga, gb = graph['A'], graph['B']
-                        gdc = graph['delta C']
-                        gc = ga/gb
-                        if bkgrd:
-                            ga -= bkgrd['A'] * cfg
-                            gb -= bkgrd['B'] * cfg
-                            gc = ga/gb
-                            gda = graph['delta A'] + bkgrd['delta A']*cfg
-                            gdb = graph['delta B'] + bkgrd['delta B']*cfg
-                            gdc = gc * (gda/ga + gdb/gb)
-                        dc = (c/gc)*(dc/c + gdc/gc)
-                        c = c/gc
-                    y, dy = c, dc
-                points.append((x, y, dy, files, group))
-            measurements.append(MiezeMeasurement(points, varvalue, self.unit))
+                measurement.add_point(x, point, graph, bkgrd, files)
+            measurements.append(measurement)
         return measurements
 
     MARKERS = ['o', '^', 's', 'D', 'v']
 
     def plot(self, fig=None, fit=True, color=None, ylabel=None,
              bygroup=True, subplots=True, lines=False, data=None, **kwds):
+        # optional parameters
         if data is None:
             data = self.get_data(**kwds)
-
-        if not fig:
+        if fig is None:
             fig = ml_figure()
 
+        # calculate the number of subplot rows and columns
         if subplots:
             fig.subplots_adjust(wspace=0.3)
             ncols = len(data) >= 9 and 3 or 2
@@ -410,7 +430,7 @@ class MiezeData(object):
         lastrow = True
         firstcol = True
         for j, meas in enumerate(data):
-            # setup plot
+            # setup a single subplot, or use the standard one
             if subplots:
                 ax = fig.add_subplot(nrows, ncols, j+1)
                 ax.set_title(meas.label)
@@ -418,6 +438,8 @@ class MiezeData(object):
                 firstcol = j % ncols == 0
             else:
                 ax = fig.gca()
+
+            # put axis labels only on the left and bottom of all subplots
             if lastrow:
                 ax.set_xlabel('$\\tau_{MIEZE}$ / ps')
             if firstcol:
@@ -427,7 +449,7 @@ class MiezeData(object):
                     ax.set_ylabel(kwds.get('ycol', 'C') +
                                   (self.norm and ' (norm)' or ''))
 
-            # plot data
+            # plot the data, by groups or together
             kwds = {'picker': 5, 'ls': lines and 'solid' or ''}
             if color is not None:
                 kwds['color'] = color
@@ -442,20 +464,24 @@ class MiezeData(object):
                     coll = ax.errorbar(gx, gy, gdy,
                                        label=glabel, marker=gmarker, **kwds)
                     self.collections[coll[0]] = gsf
+            ax.set_ylim(ymin=0)
 
-            if fit:
-                res = meas.fit(self.name)
-                if res:
-                    ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
-                    if res.Gamma < 0.02:
-                        # below instrumental resolution
-                        text = '$\Gamma = 0$'
-                    else:
-                        text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
-                               (_format_num(res.Gamma, 2),
-                                _format_num(res.dGamma, 2))
-                    ax.text(0.03, 0.03, text, size='large',
-                            transform=ax.transAxes)
+            # fit the data if wanted and if possible (only makes sense for 'C')
+            if not fit or kwds.get('ycol', 'C') != 'C':
+                continue
+            res = meas.fit(self.name)
+            if not res:
+                continue
+
+            ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
+            if res.Gamma < 0.01:
+                # Gamma is below instrumental resolution
+                text = '$\Gamma = 0$'
+            else:
+                text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
+                       (_format_num(res.Gamma, 2), _format_num(res.dGamma, 2))
+            # display the Gamma value as text
+            ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             ax.set_ylim(ymin=0)
 
     def plot_data(self, filename=None, title=None, legend=True, **kwds):

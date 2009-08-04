@@ -17,12 +17,12 @@ try:
 except ImportError:
     import pylab as pl
 
-__all__ = ['Data', 'np', 'pl',
-           'ml_debug', 'ml_setdatadir', 'ml_figure', 'ml_fit']
+__all__ = ['MiezeData', 'Fit', 'np', 'pl',
+           'ml_debug', 'ml_setdatadir', 'ml_figure']
 
 ALL = object()
 
-# -- helper for calculating tau_MIEZE ------------------------------------------
+# -- helper for calculating tau_MIEZE and formatting numbers -------------------
 
 M_N = 1.6749e-27
 H   = 6.6261e-34
@@ -37,6 +37,13 @@ def _mieze_time(lam, L_s, setting):
     if bs: dOmega *= 2
     tau = (prefactor * lam**3 * dOmega * L_s) * 1e12  # in ps
     return tau
+
+def _format_num(val, prec):
+    num = '%.*g' % (prec, val)
+    if 'e' in num:
+        num = num.replace('e-0', 'e-')
+        num = num.replace('e', '\\cdot 10^{') + '}'
+    return num
 
 # -- debugging helpers ---------------------------------------------------------
 
@@ -111,44 +118,121 @@ def ml_figure(suptitle=None, titlesize='x-large', **kwargs):
     return fig
 
 
-def ml_fit(x, y, dy, model, parnames, parstart, name=None):
-    # degrees of freedom
-    ndf = len(x) - 2
-    # try fitting with ODR
-    data = RealData(x, y, sy=dy)
-    # fit with fixed x values
-    odr = ODR(data, Model(model), beta0=parstart, ifixx=array([0]*len(x)))
-    out = odr.run()
-    if 1 <= out.info <= 3:
-        parvalues = out.beta
-        sd_parvalues = out.sd_beta
-        chi2 = sum(power(model(parvalues, x) - y, 2) / power(dy, 2))/ndf
-        print 'Fit %-20s success (  ODR  ), chi2: %8.3g, params: %s' % (
-            name or '', chi2, ', '.join('%s = %8.3g +/- %8.3g' % v
-                                        for v in zip(parnames, parvalues,
-                                                     sd_parvalues)))
-    else:
-        # if it doesn't converge, try leastsq (doesn't consider errors)
-        out = leastsq(lambda v: model(v, x) - y, parstart)
-        if out[1] <= 4:
-            parvalues = out[0]
-            sd_parvalues = [0]*len(parvalues)
-            chi2 = sum(power(model(parvalues, x) - y, 2) / power(dy, 2))/ndf
-            print 'Fit %-20s success (leastsq), chi2: %8.3g, params: %s' % (
-                name or '', chi2, ', '.join('%s = %8.3g' % v for
-                                            v in zip(parnames, parvalues)))
+# -- fitting helpers -----------------------------------------------------------
+
+class FitResult(object):
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
+    def __str__(self):
+        if self._failed:
+            return 'Fit %-20s failed' % self._name
+        elif self._method == 'ODR':
+            return 'Fit %-20s success (  ODR  ), chi2: %8.3g, params: %s' % (
+                self._name or '', self.chi2,
+                ', '.join('%s = %8.3g +/- %8.3g' % v for v in zip(*self._pars)))
         else:
-            print 'Fit %-20s failed' % (self.name or '')
-            return None, None, None, None, None
-    # calc. curve
-    fx = linspace(x[0], x[-1], 1000)
-    fy = model(parvalues, fx)
-    return list(parvalues), list(sd_parvalues), fx, fy, chi2
+            return 'Fit %-20s success (leastsq), chi2: %8.3g, params: %s' % (
+                self._name or '', self.chi2,
+                ', '.join('%s = %8.3g' % v[:2] for v in zip(*self._pars)))
+
+    def __nonzero__(self):
+        return not self._failed
 
 
-# -- data object ---------------------------------------------------------------
+class Fit(object):
+    def __init__(self, model, parnames=None, parstart=None):
+        self.model = model
+        self.parnames = parnames or []
+        self.parstart = parstart or []
+        if len(self.parnames) != len(self.parstart):
+            raise RuntimeError('number of param names must match number '
+                               'of starting values')
+
+    def par(self, name, start):
+        self.parnames.append(name)
+        self.parstart.append(start)
+
+    def run(self, name, x, y, dy):
+        # try fitting with ODR
+        data = RealData(x, y, sy=dy)
+        # fit with fixed x values
+        odr = ODR(data, Model(self.model), beta0=self.parstart,
+                  ifixx=array([0]*len(x)))
+        out = odr.run()
+        if 1 <= out.info <= 3:
+            return self.result(name, 'ODR', x, y, dy, out.beta, out.sd_beta)
+        else:
+            # if it doesn't converge, try leastsq (doesn't consider errors)
+            out = leastsq(lambda v: self.model(v, x) - y, self.parstart)
+            if out[1] <= 4:
+                return self.result(name, 'leastsq', x, y, dy, out[0],
+                                   parerrors=[0]*len(out[0]))
+            else:
+                return FitResult(_name=self.name, _failed=True)
+
+    def result(self, name, method, x, y, dy, parvalues, parerrors):
+        dct = {'_name': name, '_method': method, '_failed': False,
+               '_pars': (self.parnames, parvalues, parerrors)}
+        for name, val, err in zip(self.parnames, parvalues, parerrors):
+            dct[name] = val
+            dct['d' + name] = err
+        dct['curve_x'] = linspace(x[0], x[-1], 1000)
+        dct['curve_y'] = self.model(parvalues, dct['curve_x'])
+        ndf = len(x) - len(parvalues)
+        residuals = self.model(parvalues, x) - y
+        dct['chi2'] = sum(power(residuals, 2) / power(dy, 2)) / ndf
+        result = FitResult(**dct)
+        dprint(result)
+        return result
+
+
+# -- data objects --------------------------------------------------------------
+
+class MiezeMeasurement(object):
+    """Container for a single MIEZE measurement (multiple MIEZE times)."""
+
+    def __init__(self, points, varvalue, unit):
+        self.points = sorted(points)
+        self.varvalue = varvalue
+        self.unit = unit
+        self.arrays = None
+
+    @property
+    def label(self):
+        return '%s %s' % (self.varvalue, self.unit)
+
+    def as_arrays(self):
+        if self.arrays:
+            return self.arrays
+        self.arrays = map(array, zip(*self.points))
+        return self.arrays
+
+    def as_arrays_bygroup(self):
+        get_group = lambda v: v[4]
+        newpoints = sorted(self.points, key=get_group)
+        for groupname, grouppoints in groupby(newpoints, get_group):
+            gx, gy, gdy, gsf, _ = map(array, zip(*grouppoints))
+            yield groupname, gx, gy, gdy, gsf
+
+    def _fit_model(self, v, x):
+        return v[1]*exp(-abs(v[0])*x)
+
+    def fit(self, name=None):
+        name = '%s %s' % (name or '', self.label)
+        x, y, dy = self.as_arrays()[:3]
+        res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1]).run(name, x, y, dy)
+        if not res:
+            return None
+        # gamma is in ps^-1, conversion factor is hbar = 657 mueV*ps
+        res.Gamma = abs(res.Gamma) * 657
+        res.dGamma = res.dGamma * 657
+        return res
+
 
 class MiezeData(object):
+    """Container for a whole range of MIEZE measurements."""
+
     def __init__(self, name, variable, unit):
         self.name = name
         self.unit = unit
@@ -239,9 +323,9 @@ class MiezeData(object):
                                    if dmin <= k <= dmax)
             else:
                 varvalues = sorted(self.mess.keys())
-        sets = []
+        measurements = []
         for varvalue in varvalues:
-            xydy = []
+            points = []
             for x, point in self.mess[varvalue].items():
                 group = point.get('group')
                 graph = self.norm.get(x)
@@ -304,21 +388,9 @@ class MiezeData(object):
                         dc = (c/gc)*(dc/c + gdc/gc)
                         c = c/gc
                     y, dy = c, dc
-                xydy.append((x, y, dy, files, group))
-            xydy.sort()
-            data = [xydy, '%s %s' % (varvalue, self.unit)]
-            sets.append(data)
-        return sets
-
-    def format_num_latex(self, val, prec):
-        num = '%.*g' % (prec, val)
-        if 'e' in num:
-            num = num.replace('e-0', 'e-')
-            num = num.replace('e', '\\cdot 10^{') + '}'
-        return num
-
-    def _fit_model(self, v, x):
-        return v[0]*exp(-abs(v[1])*x)
+                points.append((x, y, dy, files, group))
+            measurements.append(MiezeMeasurement(points, varvalue, self.unit))
+        return measurements
 
     MARKERS = ['o', '^', 's', 'D', 'v']
 
@@ -337,11 +409,11 @@ class MiezeData(object):
 
         lastrow = True
         firstcol = True
-        for j, (xydy, label) in enumerate(data):
+        for j, meas in enumerate(data):
             # setup plot
             if subplots:
                 ax = fig.add_subplot(nrows, ncols, j+1)
-                ax.set_title(label)
+                ax.set_title(meas.label)
                 lastrow = j >= len(data) - ncols
                 firstcol = j % ncols == 0
             else:
@@ -356,47 +428,32 @@ class MiezeData(object):
                                   (self.norm and ' (norm)' or ''))
 
             # plot data
-            x, y, dy, sf, _ = map(array, zip(*xydy))
             kwds = {'picker': 5, 'ls': lines and 'solid' or ''}
             if color is not None:
                 kwds['color'] = color
             if not bygroup:
-                coll = ax.errorbar(x, y, dy, label=label, marker='o', **kwds)
+                x, y, dy, sf, _ = meas.as_arrays()
+                coll = ax.errorbar(x, y, dy, label=meas.label, marker='o', **kwds)
                 self.collections[coll[0]] = sf
             else:
-                # sort by group
-                get_group = lambda v: v[4]
-                xydy.sort(key=get_group)
-                for groupmarker, (groupname, groupxydy) in \
-                        izip(cycle(self.MARKERS), groupby(xydy, get_group)):
-                    cx, cy, cdy, csf, _ = map(array, zip(*groupxydy))
-                    grouplabel = '%s %s' % (label, groupname)
-                    coll = ax.errorbar(cx, cy, cdy, label=grouplabel,
-                                       marker=groupmarker, **kwds)
-                    self.collections[coll[0]] = csf
+                for gmarker, (gname, gx, gy, gdy, gsf) in \
+                    izip(cycle(self.MARKERS), meas.as_arrays_bygroup()):
+                    glabel = '%s %s' % (meas.label, gname)
+                    coll = ax.errorbar(gx, gy, gdy,
+                                       label=glabel, marker=gmarker, **kwds)
+                    self.collections[coll[0]] = gsf
 
             if fit:
-                vfit, verr, fx, fy, chi2 = ml_fit(
-                    x, y, dy, self._fit_model, ['Gamma', 'c'], [1, 0],
-                    name='%s %s' % (self.name, label))
-                if vfit:
-                    ax.plot(fx, fy, 'm-', label='exp. fit')
-                    gamma = abs(vfit[1]) * 1000 # in 1/ns
-                    if gamma < 0.03:
-                        gamma = 0
-                    gamma_s = self.format_num_latex(gamma, 2)
-                    gamerr_s = self.format_num_latex(verr[1]*1000, 2)
-                    gamma_muev_s = self.format_num_latex(gamma * 0.657, 2)
-                    gamerr_muev_s = self.format_num_latex(verr[1] * 657, 2)
-                    chi2_s = self.format_num_latex(chi2, 2)
-                    if gamma == 0:
-                        text = r'$\Gamma = 0$'
+                res = meas.fit(self.name)
+                if res:
+                    ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
+                    if res.Gamma < 0.02:
+                        # below instrumental resolution
+                        text = '$\Gamma = 0$'
                     else:
-                        text = (
-                            r'$\Gamma = %s\,\mathrm{ns}^{-1}$''\n'r'$\hat{=}\, '
-                            r'%s\,\mathrm{\mu eV}$' % (gamma_s, gamma_muev_s)
-                            #+ '\n' r'$\chi^2/\mathrm{ndf} = %s$' % chi2_s
-                        )
+                        text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
+                               (_format_num(res.Gamma, 2),
+                                _format_num(res.dGamma, 2))
                     ax.text(0.03, 0.03, text, size='large',
                             transform=ax.transAxes)
             ax.set_ylim(ymin=0)
@@ -410,7 +467,7 @@ class MiezeData(object):
         self.fig.canvas.mpl_connect('pick_event', self.on_pick)
         if filename is not None:
             self.fig.savefig(filename)
-            print 'Wrote', filename
+            dprint('Wrote', title or self.name, 'to', filename)
 
     # -- plotting a single MIEZE measurement (e.g. for checking the fit) -------
 

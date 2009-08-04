@@ -20,6 +20,8 @@ except ImportError:
 __all__ = ['Data', 'np', 'pl',
            'ml_debug', 'ml_setdatadir', 'ml_figure', 'ml_fit']
 
+ALL = object()
+
 # -- helper for calculating tau_MIEZE ------------------------------------------
 
 M_N = 1.6749e-27
@@ -141,15 +143,12 @@ def ml_fit(x, y, dy, model, parnames, parstart, name=None):
     # calc. curve
     fx = linspace(x[0], x[-1], 1000)
     fy = model(parvalues, fx)
-    # calc. chi-square
     return list(parvalues), list(sd_parvalues), fx, fy, chi2
 
 
 # -- data object ---------------------------------------------------------------
 
-ALL = object()
-
-class Data(object):
+class MiezeData(object):
     def __init__(self, name, variable, unit):
         self.name = name
         self.unit = unit
@@ -366,9 +365,10 @@ class Data(object):
                 self.collections[coll[0]] = sf
             else:
                 # sort by group
-                xydy.sort(key=lambda v: v[4])
+                get_group = lambda v: v[4]
+                xydy.sort(key=get_group)
                 for groupmarker, (groupname, groupxydy) in \
-                        izip(cycle(self.MARKERS), groupby(xydy, lambda v: v[4])):
+                        izip(cycle(self.MARKERS), groupby(xydy, get_group)):
                     cx, cy, cdy, csf, _ = map(array, zip(*groupxydy))
                     grouplabel = '%s %s' % (label, groupname)
                     coll = ax.errorbar(cx, cy, cdy, label=grouplabel,
@@ -392,10 +392,11 @@ class Data(object):
                     if gamma == 0:
                         text = r'$\Gamma = 0$'
                     else:
-                        text = (r'$\Gamma = %s\,\mathrm{ns}^{-1}$''\n'r'$\hat{=}\, '
-                                r'%s\,\mathrm{\mu eV}$' % (gamma_s, gamma_muev_s)
-                                #+ '\n' r'$\chi^2/\mathrm{ndf} = %s$' % chi2_s
-                                )
+                        text = (
+                            r'$\Gamma = %s\,\mathrm{ns}^{-1}$''\n'r'$\hat{=}\, '
+                            r'%s\,\mathrm{\mu eV}$' % (gamma_s, gamma_muev_s)
+                            #+ '\n' r'$\chi^2/\mathrm{ndf} = %s$' % chi2_s
+                        )
                     ax.text(0.03, 0.03, text, size='large',
                             transform=ax.transAxes)
             ax.set_ylim(ymin=0)
@@ -428,18 +429,18 @@ class Data(object):
         """Plot single MIEZE curves."""
 
         def fileinfo(filename):
-            points = []
+            pts = []
             for line in open(filename):
                 line = line.strip()
                 if not line: continue
                 if not line.startswith('#'):
-                    points.append(int(line))
+                    pts.append(int(line))
                     continue
                 line = line[2:]
                 if line.startswith('t/s:'):
                     preset = int(line[5:])
                 elif line.startswith('sum:'):
-                    countsum = int(line[5:])
+                    ctsum = int(line[5:])
                 elif line.startswith('mon:'):
                     monitor = int(line[5:])
                 elif line.startswith('A:'):
@@ -450,22 +451,23 @@ class Data(object):
                     C, dC = map(float, self.pm_re.match(line[5:]).groups())
                 elif line.startswith('phi:'):
                     phi, dphi = map(float, self.pm_re.match(line[5:]).groups())
-            points = array(points)
-            return points, preset, countsum, monitor, A, dA, B, dB, C, dC, phi, dphi
+            pts = array(pts)
+            return pts, preset, ctsum, monitor, A, dA, B, dB, C, dC, phi, dphi
 
         def mz(x, A, B, phi):
             return B + A*sin(pi/4*x + phi)
 
         def plotinfo(filename, name, ax):
             info = fileinfo(filename)
-            points, preset, countsum, monitor, A, dA, B, dB, C, dC, phi, dphi = info
+            pts, preset, ctsum, monitor, A, dA, B, dB, C, dC, phi, dphi = info
 
-            ax.set_title('%s: %s\n'
-                         r'$C = %.2f \pm %.2f$, $A = %.2f \pm %.2f$, $B = %.2f \pm %.2f$, '
-                         r'$\Sigma = %s$, $t = %s$' %
-                         (name, filename, C, dC, A, dA, B, dB, countsum, preset))
+            ax.set_title('%s: %s\n' % (name, filename) +
+                         r'$C = %.2f \pm %.2f$, ' % (C, dC) +
+                         r'$A = %.2f \pm %.2f$, ' % (A, dA) +
+                         r'$B = %.2f \pm %.2f$, ' % (B, dB) +
+                         r'$\Sigma = %s$, $t = %s$' % (ctsum, preset))
             ax.set_ylabel('counts')
-            ax.errorbar(arange(1, 17), points, sqrt(points), fmt='ro')
+            ax.errorbar(arange(1, 17), pts, sqrt(pts), fmt='ro')
 
             xs = arange(0, 16, 0.1)
             ys = mz(xs, A, B, phi)

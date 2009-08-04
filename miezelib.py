@@ -51,7 +51,7 @@ def dprint(*args):
 
 # -- helper for reading data files ---------------------------------------------
 
-_datadir = '.' 
+_datadir = '.'
 
 def ml_setdatadir(dir):
     global _datadir
@@ -82,10 +82,13 @@ def read_datafile(fn):
 def ml_on_key_release(event):
     if event.key == 'q':
         try:
+            # works only with GtkAgg backend; raises AttributeError despite
+            # closing the window eventually
             event.canvas.manager.destroy()
         except AttributeError:
             pass
     elif event.key == 'L':
+        # toggle x axis log scaling, analogous to code for y axis (key 'l')
         ax = event.inaxes
         if not ax:
             return
@@ -113,7 +116,7 @@ def ml_fit(x, y, dy, model, parnames, parstart, name=None):
     data = RealData(x, y, sy=dy)
     # fit with fixed x values
     odr = ODR(data, Model(model), beta0=parstart, ifixx=array([0]*len(x)))
-    out = odr.run() 
+    out = odr.run()
     if 1 <= out.info <= 3:
         parvalues = out.beta
         sd_parvalues = out.sd_beta

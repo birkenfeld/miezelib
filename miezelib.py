@@ -18,7 +18,7 @@ except ImportError:
     import pylab as pl
 
 __all__ = ['MiezeData', 'Fit', 'np', 'pl',
-           'ml_debug', 'ml_setdatadir', 'ml_figure']
+           'ml_debug', 'ml_setdatadir', 'ml_figure', 'ml_gammaplot']
 
 ALL = object()
 
@@ -117,6 +117,70 @@ def ml_figure(suptitle=None, titlesize='x-large', **kwargs):
         fig.suptitle(suptitle, size=titlesize, y=0.95)
     return fig
 
+def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
+                 filename=None, title=None, titlesize=None, fit=None):
+    if figsize is None:
+        figsize = (3*len(data), 4)
+    fig = ml_figure(title, titlesize=titlesize, figsize=figsize)
+    fig.subplots_adjust(left=0.1, right=0.92, top=0.83, bottom=0.2,
+                        wspace=0.08)
+    axes, ylimits = [], []
+    for j, (meass, title) in enumerate(zip(data, titles)):
+        if title is None:
+            title = meass[0].data.name
+        ax = fig.add_subplot(1, len(data), j+1)
+        x, y, dy = [], [], []
+        for meas in meass:
+            res = meas.fit()
+            if res:
+                x.append(meas.varvalue)
+                y.append(res.Gamma)
+                dy.append(res.dGamma)
+        ax.errorbar(x, y, dy, marker='o', ls='')
+
+        if fit:
+            res = fit.run(title, x, y, dy)
+            if res:
+                ax.plot(res.curve_x, res.curve_y, '-')
+
+        ylimits.append(ax.get_ylim())
+        ax.set_xlim(x[0]-0.1, x[-1]+0.1)
+        ax.set_xlabel('$%s/%s$' % (meas.data.variable, meas.data.unit),
+                      size=textsize)
+        pl.xticks(size=ticksize, verticalalignment='bottom', y=-0.08)
+        pl.yticks(size=ticksize)
+        if j == 0:
+            # first plot
+            ax.set_ylabel('$\\Gamma/\\mu\\mathrm{eV}$', size=textsize)
+        elif j == len(data) - 1:
+            # last plot: put ticks on right side
+            ax.yaxis.set_ticks_position('right')
+            for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                t.tick1On = True
+            pl.yticks(size=ticksize)
+        else:
+            # middle plots: no ticks
+            for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                t.label1On = False
+        axes.append(ax)
+        pl.text(0.9, 0.9, title, size=textsize,
+                horizontalalignment='right',
+                verticalalignment='top',
+                transform=pl.gca().transAxes)
+
+    # make the Y scale equal for all plots
+    yminmin = ylimits[0][0]
+    ymaxmax = ylimits[0][1]
+    for ymin, ymax in ylimits[1:]:
+        yminmin = min(ymin, yminmin)
+        ymaxmax = max(ymax, ymaxmax)
+    for ax in axes:
+        ax.set_ylim(yminmin, ymaxmax)
+
+    if filename is not None:
+        fig.savefig(filename)
+        dprint('Wrote', title or self.name, 'to', filename)
+
 
 # -- fitting helpers -----------------------------------------------------------
 
@@ -195,9 +259,9 @@ class Fit(object):
 class MiezeMeasurement(object):
     """Container for a single MIEZE measurement (multiple MIEZE times)."""
 
-    def __init__(self, ycol, varvalue, unit):
+    def __init__(self, data, ycol, varvalue):
         self.varvalue = varvalue
-        self.unit = unit
+        self.data = data
         self._calc_point = getattr(self, '_calc_point_' + ycol)
 
         self.points = []
@@ -278,7 +342,7 @@ class MiezeMeasurement(object):
 
     @property
     def label(self):
-        return '%s %s' % (self.varvalue, self.unit)
+        return '%s %s' % (self.varvalue, self.data.unit)
 
     def as_arrays(self):
         if self.arrays:
@@ -402,7 +466,7 @@ class MiezeData(object):
                 varvalues = sorted(self.mess.keys())
         measurements = []
         for varvalue in varvalues:
-            measurement = MiezeMeasurement(ycol, varvalue, self.unit)
+            measurement = MiezeMeasurement(self, ycol, varvalue)
             for x, point in self.mess[varvalue].items():
                 graph = self.norm.get(x)
                 bkgrd = self.back.get(x)
@@ -485,14 +549,14 @@ class MiezeData(object):
             ax.set_ylim(ymin=0)
 
     def plot_data(self, filename=None, title=None, legend=False, **kwds):
-        self.fig = ml_figure(title or self.name)
-        self.plot(self.fig, **kwds)
+        fig = ml_figure(title or self.name)
+        self.plot(fig, **kwds)
         if legend:
-            self.fig.gca().legend(loc=(1,0))
-            self.fig.subplots_adjust(right=0.8)
-        self.fig.canvas.mpl_connect('pick_event', self.on_pick)
+            fig.gca().legend(loc=(1,0))
+            fig.subplots_adjust(right=0.8)
+        fig.canvas.mpl_connect('pick_event', self.on_pick)
         if filename is not None:
-            self.fig.savefig(filename)
+            fig.savefig(filename)
             dprint('Wrote', title or self.name, 'to', filename)
 
     # -- plotting a single MIEZE measurement (e.g. for checking the fit) -------

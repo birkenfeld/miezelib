@@ -484,7 +484,7 @@ class MiezeData(object):
             ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             ax.set_ylim(ymin=0)
 
-    def plot_data(self, filename=None, title=None, legend=True, **kwds):
+    def plot_data(self, filename=None, title=None, legend=False, **kwds):
         self.fig = ml_figure(title or self.name)
         self.plot(self.fig, **kwds)
         if legend:

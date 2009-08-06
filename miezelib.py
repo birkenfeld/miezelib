@@ -131,11 +131,16 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
         ax = fig.add_subplot(1, len(data), j+1)
         x, y, dy = [], [], []
         for meas in meass:
-            res = meas.fit()
-            if res:
+            if meas.fitvalues is not None:
                 x.append(meas.varvalue)
-                y.append(res.Gamma)
-                dy.append(res.dGamma)
+                y.append(meas.fitvalues[0])
+                dy.append(meas.fitvalues[1])
+            else:
+                res = meas.fit()
+                if res:
+                    x.append(meas.varvalue)
+                    y.append(res.Gamma)
+                    dy.append(res.dGamma)
         ax.errorbar(x, y, dy, marker='o', ls='')
 
         if fit:
@@ -262,6 +267,7 @@ class MiezeMeasurement(object):
     def __init__(self, data, ycol, varvalue):
         self.varvalue = varvalue
         self.data = data
+        self.fitvalues = None
         self._calc_point = getattr(self, '_calc_point_' + ycol)
 
         self.points = []
@@ -368,6 +374,7 @@ class MiezeMeasurement(object):
         if not res:
             return None
         res.Gamma = abs(res.Gamma)
+        self.fitvalues = (res.Gamma, res.dGamma, res.chi2)
         return res
 
 
@@ -547,10 +554,11 @@ class MiezeData(object):
             # display the Gamma value as text
             ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             ax.set_ylim(ymin=0)
+        return data
 
     def plot_data(self, filename=None, title=None, legend=False, **kwds):
         fig = ml_figure(title or self.name)
-        self.plot(fig, **kwds)
+        ret = self.plot(fig, **kwds)
         if legend:
             fig.gca().legend(loc=(1,0))
             fig.subplots_adjust(right=0.8)
@@ -558,6 +566,7 @@ class MiezeData(object):
         if filename is not None:
             fig.savefig(filename)
             dprint('Wrote', title or self.name, 'to', filename)
+        return ret
 
     # -- plotting a single MIEZE measurement (e.g. for checking the fit) -------
 

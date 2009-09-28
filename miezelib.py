@@ -119,8 +119,9 @@ def ml_figure(suptitle=None, titlesize='x-large', **kwargs):
 
 def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
                  filename=None, title=None, titlesize=None, fit=None):
+    ndata = len(data)
     if figsize is None:
-        figsize = (3*len(data), 4)
+        figsize = (3*ndata, 4)
     fig = ml_figure(title, titlesize=titlesize, figsize=figsize)
     fig.subplots_adjust(left=0.1, right=0.92, top=0.83, bottom=0.2,
                         wspace=0.08)
@@ -128,7 +129,7 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
     for j, (meass, title) in enumerate(zip(data, titles)):
         if title is None:
             title = meass[0].data.name
-        ax = fig.add_subplot(1, len(data), j+1)
+        ax = fig.add_subplot(1, ndata, j+1)
         x, y, dy = [], [], []
         for meas in meass:
             if meas.fitvalues is not None:
@@ -157,8 +158,8 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
         if j == 0:
             # first plot
             ax.set_ylabel('$\\Gamma/\\mu\\mathrm{eV}$', size=textsize)
-        elif j == len(data) - 1:
-            # last plot: put ticks on right side
+        elif j == ndata - 1:
+            # last plot: put ticks on right side (only for > 1 plot)
             ax.yaxis.set_ticks_position('right')
             for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
                 t.tick1On = True

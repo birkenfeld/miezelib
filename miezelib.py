@@ -382,10 +382,12 @@ class MiezeMeasurement(object):
 class MiezeData(object):
     """Container for a whole range of MIEZE measurements."""
 
-    def __init__(self, name, variable, unit):
+    def __init__(self, name, variable, unit, var_norm=False, var_back=False):
         self.name = name
         self.unit = unit
         self.variable = variable
+        self.var_norm = var_norm
+        self.var_back = var_back
         self.mess = {}
         self.norm = {}
         self.back = {}
@@ -446,15 +448,18 @@ class MiezeData(object):
                 dct[point['tau']] = point
 
     def read_data(self, file, varvalue=None, vals=None, ipars=None, group=None):
-        self.read_file(file, self.mess, True, varvalue, vals, None, ipars, group)
+        self.read_file(file, self.mess, True, varvalue, vals, None,
+                       ipars, group)
         dprint('read file', file, 'as data')
 
-    def read_norm(self, file, onlyval=None, ipars=None, group=None):
-        self.read_file(file, self.norm, False, None, None, onlyval, ipars, group)
+    def read_norm(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
+        self.read_file(file, self.norm, self.var_norm, varvalue, None,
+                       onlyval, ipars, group)
         dprint('read file', file, 'as normalization')
 
-    def read_back(self, file, onlyval=None, ipars=None, group=None):
-        self.read_file(file, self.back, False, None, None, onlyval, ipars, group)
+    def read_back(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
+        self.read_file(file, self.back, self.var_back, varvalue, None,
+                       onlyval, ipars, group)
         dprint('read file', file, 'as background')
 
     def _filenames(self, meas, graph, bkgrd):
@@ -476,8 +481,14 @@ class MiezeData(object):
         for varvalue in varvalues:
             measurement = MiezeMeasurement(self, ycol, varvalue)
             for x, point in self.mess[varvalue].items():
-                graph = self.norm.get(x)
-                bkgrd = self.back.get(x)
+                if self.var_norm:
+                    graph = self.norm[varvalue].get(x)
+                else:
+                    graph = self.norm.get(x)
+                if self.var_back:
+                    bkgrd = self.back[varvalue].get(x)
+                else:
+                    bkgrd = self.back.get(x)
                 files = self._filenames(point, graph, bkgrd)
                 measurement.add_point(x, point, graph, bkgrd, files)
             measurements.append(measurement)
@@ -584,6 +595,7 @@ class MiezeData(object):
 
     def plot_mieze(self, filenames):
         """Plot single MIEZE curves."""
+        print "mieze:", filenames
 
         def fileinfo(filename):
             pts = []

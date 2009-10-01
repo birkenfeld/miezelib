@@ -224,6 +224,9 @@ class Fit(object):
         self.parstart.append(start)
 
     def run(self, name, x, y, dy):
+        if len(x) < 2:
+            # need at least two points to fit
+            return self.result(name, None, x, y, dy, None, None)
         # try fitting with ODR
         data = RealData(x, y, sy=dy)
         # fit with fixed x values
@@ -595,7 +598,6 @@ class MiezeData(object):
 
     def plot_mieze(self, filenames):
         """Plot single MIEZE curves."""
-        print "mieze:", filenames
 
         def fileinfo(filename):
             pts = []
@@ -665,3 +667,4 @@ class MiezeData(object):
             ax = fig.gca()
             plotinfo(filenames[0], 'Measurement', ax)
         fig.subplots_adjust(hspace=0.3, bottom=0.05)
+        fig.show()

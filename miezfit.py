@@ -43,9 +43,9 @@ def mieze_fit(data):
 
 def pformat((params, errors)):
     pnames = ('A', 'B', 'phi', 'C')
-    return ' '.join(('%s=%.5g' % i).ljust(12) for i in zip(pnames, params)) + \
+    return ' '.join(('%s=%.9g' % i).ljust(12) for i in zip(pnames, params)) + \
            ' || ' + \
-           ' '.join(('d%s=%.4g' % i).ljust(10) for i in zip(pnames, errors))
+           ' '.join(('d%s=%.7g' % i).ljust(10) for i in zip(pnames, errors))
 
 def read_measurement(fname):
     counts = []

@@ -17,7 +17,7 @@ try:
 except ImportError:
     import pylab as pl
 
-__all__ = ['MiezeData', 'Fit', 'np', 'pl',
+__all__ = ['MiezeData', 'Fit', 'np', 'pl', 'ml_mieze_time',
            'ml_debug', 'ml_setdatadir', 'ml_figure', 'ml_gammaplot']
 
 ALL = object()
@@ -29,7 +29,7 @@ H   = 6.6261e-34
 PI  = 3.1415926
 prefactor = M_N**2 / (PI * H**2)
 
-def _mieze_time(lam, L_s, setting):
+def ml_mieze_time(lam, L_s, setting):
     f1, f2, bs = re.match(r'([\dp]+)_([\dp]+)(_BS)?', setting).groups()
     f1 = float(f1.replace('p', '.')) * 1000  # in kHz
     f2 = float(f2.replace('p', '.')) * 1000  # in kHz
@@ -118,7 +118,8 @@ def ml_figure(suptitle=None, titlesize='x-large', **kwargs):
     return fig
 
 def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
-                 filename=None, title=None, titlesize=None, fit=None):
+                 filename=None, title=None, titlesize=None, fit=None,
+                 critical=None):
     ndata = len(data)
     if figsize is None:
         figsize = (3*ndata, 4)
@@ -142,6 +143,9 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
                     x.append(meas.varvalue)
                     y.append(res.Gamma)
                     dy.append(res.dGamma)
+        if critical:
+            x = map(lambda v: v - critical, x)
+
         ax.errorbar(x, y, dy, marker='o', ls='')
 
         if fit:
@@ -151,13 +155,18 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
 
         ylimits.append(ax.get_ylim())
         ax.set_xlim(x[0]-0.1, x[-1]+0.1)
-        ax.set_xlabel('$%s/%s$' % (meas.data.variable, meas.data.unit),
-                      size=textsize)
+        if critical:
+            ax.set_xlabel('$%s-%s_c\\,[%s]$' % (
+                meas.data.variable, meas.data.variable, meas.data.unit),
+                          size=textsize)
+        else:
+            ax.set_xlabel('$%s\\,[%s]$' % (meas.data.variable, meas.data.unit),
+                          size=textsize)
         pl.xticks(size=ticksize, verticalalignment='bottom', y=-0.08)
         pl.yticks(size=ticksize)
         if j == 0:
             # first plot
-            ax.set_ylabel('$\\Gamma/\\mu\\mathrm{eV}$', size=textsize)
+            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
         elif j == ndata - 1:
             # last plot: put ticks on right side (only for > 1 plot)
             ax.yaxis.set_ticks_position('right')
@@ -211,10 +220,13 @@ class FitResult(object):
 
 
 class Fit(object):
-    def __init__(self, model, parnames=None, parstart=None):
+    def __init__(self, model, parnames=None, parstart=None,
+                 xmin=None, xmax=None):
         self.model = model
         self.parnames = parnames or []
         self.parstart = parstart or []
+        self.xmin = xmin
+        self.xmax = xmax
         if len(self.parnames) != len(self.parstart):
             raise RuntimeError('number of param names must match number '
                                'of starting values')
@@ -237,7 +249,10 @@ class Fit(object):
             return self.result(name, 'ODR', x, y, dy, out.beta, out.sd_beta)
         else:
             # if it doesn't converge, try leastsq (doesn't consider errors)
-            out = leastsq(lambda v: self.model(v, x) - y, self.parstart)
+            try:
+                out = leastsq(lambda v: self.model(v, x) - y, self.parstart)
+            except TypeError:
+                return self.result(name, None, x, y, dy, None, None)
             if out[1] <= 4:
                 return self.result(name, 'leastsq', x, y, dy, out[0],
                                    parerrors=[0]*len(out[0]))
@@ -253,7 +268,15 @@ class Fit(object):
             for name, val, err in zip(self.parnames, parvalues, parerrors):
                 dct[name] = val
                 dct['d' + name] = err
-            dct['curve_x'] = linspace(x[0], x[-1], 1000)
+            if self.xmin is None:
+                xmin = x[0]
+            else:
+                xmin = self.xmin
+            if self.xmax is None:
+                xmax = x[-1]
+            else:
+                xmax = self.xmax
+            dct['curve_x'] = linspace(xmin, xmax, 1000)
             dct['curve_y'] = self.model(parvalues, dct['curve_x'])
             ndf = len(x) - len(parvalues)
             residuals = self.model(parvalues, x) - y
@@ -368,13 +391,13 @@ class MiezeMeasurement(object):
             yield groupname, gx, gy, gdy, gsf
 
     def _fit_model(self, v, x):
-        # to get gamma in mueV, conversion factor is hbar = 657 mueV*ps
-        return v[1]*exp(-abs(v[0])*x/657.)
+        # to get gamma in mueV, conversion factor is hbar = 658.2 mueV*ps
+        return v[1]*exp(-abs(v[0])*x/658.2)
 
-    def fit(self, name=None):
+    def fit(self, name=None, **kwds):
         name = '%s %s' % (name or '', self.label)
         x, y, dy = self.as_arrays()[:3]
-        res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1]).run(name, x, y, dy)
+        res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1], **kwds).run(name, x, y, dy)
         if not res:
             return None
         res.Gamma = abs(res.Gamma)
@@ -385,12 +408,15 @@ class MiezeMeasurement(object):
 class MiezeData(object):
     """Container for a whole range of MIEZE measurements."""
 
-    def __init__(self, name, variable, unit, var_norm=False, var_back=False):
+    def __init__(self, name, variable, unit, var_norm=False, var_back=False,
+                 ipars=None, resolution=None):
         self.name = name
         self.unit = unit
+        self.ipars = ipars
         self.variable = variable
         self.var_norm = var_norm
         self.var_back = var_back
+        self.resolution = resolution
         self.mess = {}
         self.norm = {}
         self.back = {}
@@ -406,6 +432,8 @@ class MiezeData(object):
 
     def read_file(self, file, dct, variable=True, varvalue=None, vals=None,
                   onlyval=None, ipars=None, group=None):
+        if ipars is None:
+            ipars = self.ipars
         if group is None and ipars:
             group = ipars[0]
         if isinstance(file, int):
@@ -431,8 +459,8 @@ class MiezeData(object):
             if 'tau' not in point or point['tau'] == '-':
                 assert ipars, \
                        'lam and L_s not given, but tau not in data file'
-                point['tau'] = _mieze_time(ipars[0]*1e-10, ipars[1]*1e-3,
-                                           point['setting'])
+                point['tau'] = ml_mieze_time(ipars[0]*1e-10, ipars[1]*1e-3,
+                                             point['setting'])
             point['group'] = group
             if variable:
                 if varvalue is not None:
@@ -468,9 +496,7 @@ class MiezeData(object):
     def _filenames(self, meas, graph, bkgrd):
         fn = lambda p: os.path.join(os.path.dirname(p['summaryfile']),
                                     '%05d' % int(p['in file']))
-        return (fn(meas),
-                graph and fn(graph) or '',
-                bkgrd and fn(bkgrd) or '')
+        return (fn(meas), graph and fn(graph) or '', bkgrd and fn(bkgrd) or '')
 
     def get_data(self, ycol='C', varvalues=ALL, varvaluerange=None):
         if varvalues is ALL:
@@ -499,7 +525,7 @@ class MiezeData(object):
 
     MARKERS = ['o', '^', 's', 'D', 'v']
 
-    def plot(self, fig=None, fit=True, color=None, ylabel=None,
+    def plot(self, fig=None, fit=True, color=None, ylabel=None, log=True,
              bygroup=True, subplots=True, lines=False, data=None, **kwds):
         # optional parameters
         if data is None:
@@ -527,7 +553,7 @@ class MiezeData(object):
 
             # put axis labels only on the left and bottom of all subplots
             if lastrow:
-                ax.set_xlabel('$\\tau_{MIEZE}$ / ps')
+                ax.set_xlabel('$\\tau_{MIEZE}$ [ps]')
             if firstcol:
                 if ylabel is not None:
                     ax.set_ylabel(ylabel)
@@ -555,12 +581,12 @@ class MiezeData(object):
             # fit the data if wanted and if possible (only makes sense for 'C')
             if not fit or kwds.get('ycol', 'C') != 'C':
                 continue
-            res = meas.fit(self.name)
+            res = meas.fit(self.name, xmin=0)
             if not res:
                 continue
 
             ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
-            if res.Gamma < 0.01:
+            if res.Gamma < (self.resolution or 0.05):
                 # Gamma is below instrumental resolution
                 text = '$\Gamma = 0$'
             else:
@@ -568,7 +594,11 @@ class MiezeData(object):
                        (_format_num(res.Gamma, 2), _format_num(res.dGamma, 2))
             # display the Gamma value as text
             ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
-            ax.set_ylim(ymin=0)
+            if log:
+                ax.set_yscale('log')
+                ax.set_ylim(ymin=1e-1, ymax=2)
+            else:
+                ax.set_ylim(ymin=0)
         return data
 
     def plot_data(self, filename=None, title=None, legend=False, **kwds):
@@ -645,7 +675,7 @@ class MiezeData(object):
             ax.plot(xs, ys, 'b-')
             ax.set_ylim(ymin=0)
 
-        fig = ml_figure()
+        fig = ml_figure(figsize=(9, 13))
         if filenames[1] and filenames[2]:
             ax = fig.add_subplot(311)
             plotinfo(filenames[0], 'Measurement', ax)
@@ -666,5 +696,5 @@ class MiezeData(object):
         else:
             ax = fig.gca()
             plotinfo(filenames[0], 'Measurement', ax)
-        fig.subplots_adjust(hspace=0.3, bottom=0.05)
+        fig.subplots_adjust(hspace=0.4, bottom=0.05)
         fig.show()

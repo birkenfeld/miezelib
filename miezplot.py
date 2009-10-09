@@ -54,6 +54,7 @@ def on_key_release(event):
 
 def figure(suptitle=None, titlesize='x-large', **kwargs):
     """Create a new figure with special key handler."""
+    pl.rc('font', family='Lucida Grande')
     fig = pl.figure(**kwargs)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
     if suptitle:
@@ -144,7 +145,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tdy.append(np.average(mdy) * 1000)
                 if critical:
                     tx = map(lambda v: v - critical, tx)
-                twax.errorbar(tx, ty, tdy, fmt='rs')
+                twax.errorbar(tx, ty, tdy, fmt='rh')
                 splx = np.linspace(tx[0], tx[-1], 100)
                 sply = splev(splx, splrep(tx, ty))
                 twax.plot(splx, sply, 'r--')

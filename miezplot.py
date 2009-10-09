@@ -40,12 +40,14 @@ def on_key_release(event):
         ax.set_ylim(ylim)
         ax.figure.canvas.draw()
 
+
 def figure(suptitle=None, titlesize='x-large', **kwargs):
     fig = pl.figure(**kwargs)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
     if suptitle:
         fig.suptitle(suptitle, size=titlesize, y=0.95)
     return fig
+
 
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
@@ -188,7 +190,6 @@ def miezeplot(filenames, infos):
         infos = [infos, None, None]
 
     def plotcurve(name, filename, info, ax):
-        print info
         varvalues, setting, preset, counts, params, errors, monitor = info
         A, B, phi, C = params
         dA, dB, dphi, dC = errors

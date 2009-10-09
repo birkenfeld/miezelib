@@ -1,12 +1,23 @@
+# -*- coding: utf-8 -*-
+"""
+    miezelib: miezplot
+    ~~~~~~~~~~~~~~~~~~
+
+    Plotting of MIEZE data.
+
+    :copyright: 2008-2009 by Georg Brandl.
+    :license: BSD.
+"""
+
 import weakref
 from itertools import izip, cycle
+
+import numpy as np
 
 import warnings
 warnings.filterwarnings("ignore", "PyArray_.*")
 
 from scipy.interpolate import splrep, splev
-
-import numpy as np
 
 try:
     import matplotlib.pyplot as pl
@@ -16,9 +27,9 @@ except ImportError:
 from miezdata import read_single
 from miezutil import dprint, format_tex
 
-# -- plotting helpers ----------------------------------------------------------
 
 def on_key_release(event):
+    """Extra key release handler for matplotlib figures."""
     if event.key == 'q':
         try:
             # works only with GtkAgg backend; raises AttributeError despite
@@ -42,6 +53,7 @@ def on_key_release(event):
 
 
 def figure(suptitle=None, titlesize='x-large', **kwargs):
+    """Create a new figure with special key handler."""
     fig = pl.figure(**kwargs)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
     if suptitle:
@@ -52,6 +64,7 @@ def figure(suptitle=None, titlesize='x-large', **kwargs):
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None):
+    """Create a plot of Gamma versus variable quantity."""
     ndata = len(data)
     if figsize is None:
         figsize = (3*ndata, 4)
@@ -182,7 +195,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
 
 
 def miezeplot(filenames, infos):
-    """Plot single MIEZE curves."""
+    """Create a plot of 1 to 3 single MIEZE curves."""
     from miezfit import model_miez_signal
 
     if not isinstance(filenames, list):
@@ -233,6 +246,8 @@ def miezeplot(filenames, infos):
 
 
 class MiezeDataPlot(object):
+    """A plot of several MIEZE measurements."""
+
     def __init__(self, data):
         self.data = data
         self.name = self.data.name
@@ -329,8 +344,6 @@ class MiezeDataPlot(object):
             else:
                 ax.set_ylim(ymin=0)
         return data
-
-    # -- plotting a single MIEZE measurement (e.g. for checking the fit) -------
 
     def on_pick(self, event):
         """Matplotlib event handler for clicking on a data point."""

@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+    miezelib: miezelib
+    ~~~~~~~~~~~~~~~~~~
+
+    Compatibility interface.
+
+    :copyright: 2008-2009 by Georg Brandl.
+    :license: BSD.
+"""
+
 import numpy as np
 import scipy as sp
 

@@ -61,10 +61,20 @@ def figure(suptitle=None, titlesize='x-large', **kwargs):
     return fig
 
 
+def show():
+    """Like matplotlib show(), but don't display a traceback on Ctrl-C."""
+    try:
+        pl.show()
+    except KeyboardInterrupt:
+        pass
+
+
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None):
     """Create a plot of Gamma versus variable quantity."""
+    from miezfit import Fit
+
     ndata = len(data)
     if figsize is None:
         figsize = (3*ndata, 4)
@@ -73,12 +83,22 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                         wspace=0.08)
     axes, ylimits = [], []
     twaxes, twylimits = [], []
-    for j, (meass, title) in enumerate(zip(data, titles)):
+    fitresults = []
+
+    if isinstance(fit, Fit) or fit is None:
+        fits = [fit] * len(data)
+    else:
+        fits = fit
+
+    for j, (meass, title, fit) in enumerate(zip(data, titles, fits)):
         if title is None:
             title = meass[0].data.name
 
         ax = fig.add_subplot(1, ndata, j+1)
         twax = ax.twinx()
+        # draw sum axes before gamma axes so that the latter is
+        # in front (zorder doesn't help here)
+        #ax.figure.axes[:] = [twax, ax]
 
         # primary data: Gamma
         x, y, dy = [], [], []
@@ -96,12 +116,15 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         if critical:
             x = map(lambda v: v - critical, x)
 
-        ax.errorbar(x, y, dy, marker='o', ls='', zorder=5)
+        ax.errorbar(x, y, dy, marker='o', ls='')
 
         if fit:
             res = fit.run(title, x, y, dy)
             if res:
-                ax.plot(res.curve_x, res.curve_y, '-', zorder=4)
+                ax.plot(res.curve_x, res.curve_y, '-')
+            fitresults.append(res)
+        else:
+            fitresults.append(None)
 
         axes.append(ax)
         ylimits.append(ax.get_ylim())
@@ -121,10 +144,10 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tdy.append(np.average(mdy) * 1000)
                 if critical:
                     tx = map(lambda v: v - critical, tx)
-                twax.errorbar(tx, ty, tdy, fmt='rs', zorder=-1)
+                twax.errorbar(tx, ty, tdy, fmt='rs')
                 splx = np.linspace(tx[0], tx[-1], 100)
                 sply = splev(splx, splrep(tx, ty))
-                twax.plot(splx, sply, 'r--', zorder=-1)
+                twax.plot(splx, sply, 'r--')
                 twaxes.append(twax)
                 twylimits.append(twax.get_ylim())
 
@@ -142,10 +165,11 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         pl.yticks(size=ticksize)
         if j == 0:
             # first plot
-            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
+            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize,
+                          color='blue')
             if twax:
                 if ndata == 1:
-                    twax.set_ylabel(seclabel, size=textsize)
+                    twax.set_ylabel(seclabel, size=textsize, color='red')
                 else:
                     for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
                         t.label2On = False
@@ -155,7 +179,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                 # put only ticklabels on secondary axis
                 for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
                     t.label1On = False
-                twax.set_ylabel(seclabel, size=textsize)
+                twax.set_ylabel(seclabel, size=textsize, color='red')
             else:
                 # put ticklabels on right side (only for > 1 plot)
                 ax.yaxis.set_ticks_position('right')
@@ -170,7 +194,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                 for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
                     t.label2On = False
 
-        pl.text(0.9, 0.9, title, size=textsize,
+        pl.text(0.9, 0.92, title, size=textsize,
                 horizontalalignment='right',
                 verticalalignment='top',
                 transform=pl.gca().transAxes)
@@ -183,7 +207,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
             yminmin = min(ymin, yminmin)
             ymaxmax = max(ymax, ymaxmax)
         for ax in axes:
-            ax.set_ylim(yminmin, ymaxmax)
+            ax.set_ylim(0, ymaxmax)
 
     _scale_equal(axes, ylimits)
     if twaxes:
@@ -192,6 +216,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
     if filename is not None:
         fig.savefig(filename)
         dprint('Wrote', title or 'gammaplot', 'to', filename)
+
+    return axes, twaxes, fitresults
 
 
 def miezeplot(filenames, infos):
@@ -280,7 +306,7 @@ class MiezeDataPlot(object):
 
         # calculate the number of subplot rows and columns
         if subplots:
-            fig.subplots_adjust(wspace=0.3)
+            fig.subplots_adjust(wspace=0.3, hspace=0.3)
             ncols = len(data) >= 9 and 3 or 2
             nrows = np.ceil(len(data)/float(ncols))
 

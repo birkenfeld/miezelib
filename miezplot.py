@@ -1,4 +1,3 @@
-import re
 import weakref
 from itertools import izip, cycle
 
@@ -14,6 +13,7 @@ try:
 except ImportError:
     import pylab as pl
 
+from miezdata import read_single
 from miezutil import dprint, format_tex
 
 # -- plotting helpers ----------------------------------------------------------
@@ -179,6 +179,58 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         dprint('Wrote', title or 'gammaplot', 'to', filename)
 
 
+def miezeplot(filenames, infos):
+    """Plot single MIEZE curves."""
+    from miezfit import model_miez_signal
+
+    if not isinstance(filenames, list):
+        filenames = [filenames, None, None]
+        infos = [infos, None, None]
+
+    def plotcurve(name, filename, info, ax):
+        print info
+        varvalues, setting, preset, counts, params, errors, monitor = info
+        A, B, phi, C = params
+        dA, dB, dphi, dC = errors
+
+        ax.set_title('%s: %s\n' % (name, filename) +
+                     r'$C = %.2f \pm %.2f$, ' % (C, dC) +
+                     r'$A = %.2f \pm %.2f$, ' % (A, dA) +
+                     r'$B = %.2f \pm %.2f$, ' % (B, dB) +
+                     r'$\Sigma = %s$, $t = %s$' % (sum(counts), preset))
+        ax.set_ylabel('counts')
+        ax.errorbar(np.arange(1, 17), counts, np.sqrt(counts), fmt='ro')
+
+        xs = np.arange(0, 16, 0.1)
+        ys = model_miez_signal([A, B, phi], xs)
+        ax.plot(xs, ys, 'b-')
+        ax.set_ylim(ymin=0)
+
+    fig = figure(figsize=(9, 13))
+    if filenames[1] and filenames[2]:
+        ax = fig.add_subplot(311)
+        plotcurve('Measurement', filenames[0], infos[0], ax)
+        ax = fig.add_subplot(312)
+        plotcurve('Normalization', filenames[1], infos[1], ax)
+        ax = fig.add_subplot(313)
+        plotcurve('Background', filenames[2], infos[2], ax)
+    elif filenames[1]:
+        ax = fig.add_subplot(211)
+        plotcurve('Measurement', filenames[0], infos[0], ax)
+        ax = fig.add_subplot(212)
+        plotcurve('Normalization', filenames[1], infos[1], ax)
+    elif filenames[2]:
+        ax = fig.add_subplot(211)
+        plotcurve('Measurement', filenames[0], infos[0], ax)
+        ax = fig.add_subplot(212)
+        plotcurve('Background', filenames[2], infos[2], ax)
+    else:
+        ax = fig.gca()
+        plotcurve('Measurement', filenames[0], infos[0], ax)
+    fig.subplots_adjust(hspace=0.4, bottom=0.05)
+    fig.show()
+
+
 class MiezeDataPlot(object):
     def __init__(self, data):
         self.data = data
@@ -285,80 +337,6 @@ class MiezeDataPlot(object):
         collection = event.artist
         if collection not in self.collections:
             return
-        filenames = self.collections[collection][npoint]
-        self.plot_mieze(filenames)
-
-    pm_re = re.compile(r'([0-9e.]+)\s+\+/-\s+([0-9e.]+)')
-
-    def plot_mieze(self, filenames):
-        """Plot single MIEZE curves."""
-
-        def fileinfo(filename):
-            pts = []
-            for line in open(filename):
-                line = line.strip()
-                if not line: continue
-                if not line.startswith('#'):
-                    pts.append(int(line))
-                    continue
-                line = line[2:]
-                if line.startswith('t/s:'):
-                    preset = int(line[5:])
-                elif line.startswith('sum:'):
-                    ctsum = int(line[5:])
-                elif line.startswith('mon:'):
-                    monitor = int(line[5:])
-                elif line.startswith('A:'):
-                    A, dA = map(float, self.pm_re.match(line[5:]).groups())
-                elif line.startswith('B:'):
-                    B, dB = map(float, self.pm_re.match(line[5:]).groups())
-                elif line.startswith('C:'):
-                    C, dC = map(float, self.pm_re.match(line[5:]).groups())
-                elif line.startswith('phi:'):
-                    phi, dphi = map(float, self.pm_re.match(line[5:]).groups())
-            pts = array(pts)
-            return pts, preset, ctsum, monitor, A, dA, B, dB, C, dC, phi, dphi
-
-        def mz(x, A, B, phi):
-            return B + A*sin(pi/4*x + phi)
-
-        def plotinfo(filename, name, ax):
-            info = fileinfo(filename)
-            pts, preset, ctsum, monitor, A, dA, B, dB, C, dC, phi, dphi = info
-
-            ax.set_title('%s: %s\n' % (name, filename) +
-                         r'$C = %.2f \pm %.2f$, ' % (C, dC) +
-                         r'$A = %.2f \pm %.2f$, ' % (A, dA) +
-                         r'$B = %.2f \pm %.2f$, ' % (B, dB) +
-                         r'$\Sigma = %s$, $t = %s$' % (ctsum, preset))
-            ax.set_ylabel('counts')
-            ax.errorbar(arange(1, 17), pts, sqrt(pts), fmt='ro')
-
-            xs = arange(0, 16, 0.1)
-            ys = mz(xs, A, B, phi)
-            ax.plot(xs, ys, 'b-')
-            ax.set_ylim(ymin=0)
-
-        fig = figure(figsize=(9, 13))
-        if filenames[1] and filenames[2]:
-            ax = fig.add_subplot(311)
-            plotinfo(filenames[0], 'Measurement', ax)
-            ax = fig.add_subplot(312)
-            plotinfo(filenames[1], 'Normalization', ax)
-            ax = fig.add_subplot(313)
-            plotinfo(filenames[2], 'Background', ax)
-        elif filenames[1]:
-            ax = fig.add_subplot(211)
-            plotinfo(filenames[0], 'Measurement', ax)
-            ax = fig.add_subplot(212)
-            plotinfo(filenames[1], 'Normalization', ax)
-        elif filenames[2]:
-            ax = fig.add_subplot(211)
-            plotinfo(filenames[0], 'Measurement', ax)
-            ax = fig.add_subplot(212)
-            plotinfo(filenames[2], 'Background', ax)
-        else:
-            ax = fig.gca()
-            plotinfo(filenames[0], 'Measurement', ax)
-        fig.subplots_adjust(hspace=0.4, bottom=0.05)
-        fig.show()
+        filenames = list(self.collections[collection][npoint])
+        infos = map(read_single, filenames)
+        miezeplot(filenames, infos)

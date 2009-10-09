@@ -6,7 +6,6 @@ from itertools import groupby
 
 import numpy as np
 
-from miezfit import Fit
 from miezutil import dprint, mieze_time
 
 ALL = object()
@@ -56,7 +55,8 @@ def read_single(fn):
         if line.startswith('#'):
             if in_vallist and 'is at' in line:
                 m = vv_re.match(line)
-                varvalues[m.group(1)] = float(m.group(2))
+                if m:
+                    varvalues[m.group(1)] = float(m.group(2))
             elif line.startswith('# Data set:'):
                 in_vallist = False
             elif line.startswith('# MIEZE setting'):
@@ -195,6 +195,7 @@ class MiezeMeasurement(object):
         return v[1]*np.exp(-abs(v[0])*x/658.2)
 
     def fit(self, name=None, **kwds):
+        from miezfit import Fit
         name = '%s %s' % (name or '', self.label)
         x, y, dy = self.as_arrays()[:3]
         res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1], **kwds).\

@@ -3,13 +3,17 @@ import re
 import sys
 import copy
 import weakref
+import warnings
 from itertools import izip, cycle, groupby
+
+warnings.filterwarnings("ignore", "PyArray_.*")
 
 from numpy import array, arange, linspace, exp, sin, sqrt, sum, power, ceil, pi
 import numpy as np
 
 from scipy.odr import RealData, Model, ODR
 from scipy.optimize import leastsq
+from scipy.interpolate import splrep, splev
 import scipy as sp
 
 try:
@@ -117,9 +121,9 @@ def ml_figure(suptitle=None, titlesize='x-large', **kwargs):
         fig.suptitle(suptitle, size=titlesize, y=0.95)
     return fig
 
-def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
-                 filename=None, title=None, titlesize=None, fit=None,
-                 critical=None):
+def ml_gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
+                 filename=None, title=None, titlesize='xx-large', fit=None,
+                 critical=None, secondary=None, seclabel=None):
     ndata = len(data)
     if figsize is None:
         figsize = (3*ndata, 4)
@@ -127,10 +131,15 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
     fig.subplots_adjust(left=0.1, right=0.92, top=0.83, bottom=0.2,
                         wspace=0.08)
     axes, ylimits = [], []
+    twaxes, twylimits = [], []
     for j, (meass, title) in enumerate(zip(data, titles)):
         if title is None:
             title = meass[0].data.name
+
         ax = fig.add_subplot(1, ndata, j+1)
+        twax = ax.twinx()
+
+        # primary data: Gamma
         x, y, dy = [], [], []
         for meas in meass:
             if meas.fitvalues is not None:
@@ -146,51 +155,98 @@ def ml_gammaplot(data, titles, figsize=None, textsize=None, ticksize=None,
         if critical:
             x = map(lambda v: v - critical, x)
 
-        ax.errorbar(x, y, dy, marker='o', ls='')
+        ax.errorbar(x, y, dy, marker='o', ls='', zorder=5)
 
         if fit:
             res = fit.run(title, x, y, dy)
             if res:
-                ax.plot(res.curve_x, res.curve_y, '-')
+                ax.plot(res.curve_x, res.curve_y, '-', zorder=4)
 
+        axes.append(ax)
         ylimits.append(ax.get_ylim())
+
+        # secondary data: normally sum
+        if secondary:
+            if seclabel is None:
+                seclabel = '$\\mathrm{Intensity\\,[a.u.]}$'
+            tx, ty, tdy = [], [], []
+            data =  secondary[j]
+            if data is not None:
+                # plot average over all points
+                for meas in data:
+                    tx.append(meas.varvalue)
+                    my, mdy = meas.as_arrays()[1:3]
+                    ty.append(np.average(my) * 1000)
+                    tdy.append(np.average(mdy) * 1000)
+                if critical:
+                    tx = map(lambda v: v - critical, tx)
+                twax.errorbar(tx, ty, tdy, fmt='rs', zorder=-1)
+                splx = np.linspace(tx[0], tx[-1], 100)
+                sply = splev(splx, splrep(tx, ty))
+                twax.plot(splx, sply, 'r--', zorder=-1)
+                twaxes.append(twax)
+                twylimits.append(twax.get_ylim())
+
+        ax.axhline(y=0, color='#cccccc', zorder=-1)
         ax.set_xlim(x[0]-0.1, x[-1]+0.1)
         if critical:
-            ax.set_xlabel('$%s-%s_c\\,[%s]$' % (
+            ax.set_xlabel('$%s-%s_c\\,[\\mathrm{%s}]$' % (
                 meas.data.variable, meas.data.variable, meas.data.unit),
                           size=textsize)
         else:
-            ax.set_xlabel('$%s\\,[%s]$' % (meas.data.variable, meas.data.unit),
+            ax.set_xlabel('$%s\\,[\\mathrm{%s}]$' % (meas.data.variable,
+                                                     meas.data.unit),
                           size=textsize)
         pl.xticks(size=ticksize, verticalalignment='bottom', y=-0.08)
         pl.yticks(size=ticksize)
         if j == 0:
             # first plot
             ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
+            if twax:
+                if ndata == 1:
+                    twax.set_ylabel(seclabel, size=textsize)
+                else:
+                    for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
+                        t.label2On = False
         elif j == ndata - 1:
-            # last plot: put ticks on right side (only for > 1 plot)
-            ax.yaxis.set_ticks_position('right')
-            for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
-                t.tick1On = True
-            pl.yticks(size=ticksize)
+            # last plot
+            if twax:
+                # put only ticklabels on secondary axis
+                for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                    t.label1On = False
+                twax.set_ylabel(seclabel, size=textsize)
+            else:
+                # put ticklabels on right side (only for > 1 plot)
+                ax.yaxis.set_ticks_position('right')
+                for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                    t.tick1On = True
+                pl.yticks(size=ticksize)
         else:
-            # middle plots: no ticks
+            # middle plots: no ticklabels
             for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
                 t.label1On = False
-        axes.append(ax)
+            if twax:
+                for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
+                    t.label2On = False
+
         pl.text(0.9, 0.9, title, size=textsize,
                 horizontalalignment='right',
                 verticalalignment='top',
                 transform=pl.gca().transAxes)
 
     # make the Y scale equal for all plots
-    yminmin = ylimits[0][0]
-    ymaxmax = ylimits[0][1]
-    for ymin, ymax in ylimits[1:]:
-        yminmin = min(ymin, yminmin)
-        ymaxmax = max(ymax, ymaxmax)
-    for ax in axes:
-        ax.set_ylim(yminmin, ymaxmax)
+    def _scale_equal(axes, ylimits):
+        yminmin = ylimits[0][0]
+        ymaxmax = ylimits[0][1]
+        for ymin, ymax in ylimits[1:]:
+            yminmin = min(ymin, yminmin)
+            ymaxmax = max(ymax, ymaxmax)
+        for ax in axes:
+            ax.set_ylim(yminmin, ymaxmax)
+
+    _scale_equal(axes, ylimits)
+    if twaxes:
+        _scale_equal(twaxes, twylimits)
 
     if filename is not None:
         fig.savefig(filename)
@@ -525,13 +581,16 @@ class MiezeData(object):
 
     MARKERS = ['o', '^', 's', 'D', 'v']
 
-    def plot(self, fig=None, fit=True, color=None, ylabel=None, log=True,
-             bygroup=True, subplots=True, lines=False, data=None, **kwds):
+    def plot(self, fig=None, fit=True, color=None, ylabel=None, log=None,
+             bygroup=True, subplots=True, lines=False, data=None, ycol='C',
+             **kwds):
         # optional parameters
         if data is None:
-            data = self.get_data(**kwds)
+            data = self.get_data(ycol=ycol, **kwds)
         if fig is None:
             fig = ml_figure()
+        if log is None:
+            log = ycol == 'C'
 
         # calculate the number of subplot rows and columns
         if subplots:
@@ -558,8 +617,7 @@ class MiezeData(object):
                 if ylabel is not None:
                     ax.set_ylabel(ylabel)
                 else:
-                    ax.set_ylabel(kwds.get('ycol', 'C') +
-                                  (self.norm and ' (norm)' or ''))
+                    ax.set_ylabel(ycol + (self.norm and ' (norm)' or ''))
 
             # plot the data, by groups or together
             kwds = {'picker': 5, 'ls': lines and 'solid' or ''}
@@ -579,7 +637,7 @@ class MiezeData(object):
             ax.set_ylim(ymin=0)
 
             # fit the data if wanted and if possible (only makes sense for 'C')
-            if not fit or kwds.get('ycol', 'C') != 'C':
+            if not fit or ycol != 'C':
                 continue
             res = meas.fit(self.name, xmin=0)
             if not res:

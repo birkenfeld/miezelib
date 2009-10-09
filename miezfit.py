@@ -16,7 +16,7 @@ from numpy import array, arange, sqrt, sin, pi, power, linspace
 from scipy.odr import RealData, Model, ODR
 from scipy.optimize import leastsq
 
-from miezutil import dprint
+from miezutil import dprint, pformat
 from miezplot import figure
 
 
@@ -67,10 +67,11 @@ def plotinfo(filename, pts, info1, info2=None):
         ax.plot(xs, ys2, 'g-')
     ax.set_ylim(ymin=0)
 
-def mieze_fit(data, asym=False, addup=False):
+
+def mieze_fit(counts, asym=False, addup=False):
     # for the moment, only fit points 2 to 15
-    x = arange(2, len(data))
-    y = array(data[1:-1])
+    x = arange(2, len(counts))
+    y = array(counts[1:-1])
 
     if addup:
         x = x[0:6]
@@ -82,25 +83,23 @@ def mieze_fit(data, asym=False, addup=False):
     # the first maximum is at pi/2 - k*x; a value of zero seems to have
     # bad effects on fitting in some cases
     est_phi = pi/2 - 4*pi/16*y.argmin() or 0.01
+
     beta0 = [est_A, est_B, est_phi]
     parnames = ['A', 'B', 'phi']
     model = odr_model_miez_signal
     if asym:
-        parnames.append('D')
-        parnames.append('chi')
-        beta0.append(0)
-        beta0.append(0)
+        parnames += ['D', 'chi']
+        beta0 += [0, 0]
         model = odr_model_miez_signal_asym
+
     odr = ODR(dat, model, beta0=beta0, ifixx=array([0]*len(x)))
     out = odr.run()
     params = dict(zip(parnames, out.beta))
     errors = dict(zip(parnames, out.sd_beta))
 
     if 'D' not in params:
-        params['D'] = 0
-        errors['D'] = 0
-        params['chi'] = 0
-        errors['chi'] = 0
+        params['D'] = errors['D'] = 0
+        params['chi'] = errors['chi'] = 0
 
     # make A always positive
     if params['A'] < 0:
@@ -121,13 +120,6 @@ def mieze_fit(data, asym=False, addup=False):
 
     return params, errors
 
-def pformat((params, errors)):
-    pnames = ('A', 'B', 'phi', 'C', 'D', 'chi')
-    return ' '.join((('%s=%%(%s).9g' % (i, i)) % params).ljust(12)
-                    for i in pnames) + \
-           ' || ' + \
-           ' '.join((('d%s=%%(%s).7g' % (i, i)) % errors).ljust(10)
-                    for i in pnames)
 
 
 # -- fitting helpers -----------------------------------------------------------
@@ -231,25 +223,27 @@ def fit_main(args):
     asym = '-a' in opts
     addup = '-s' in opts
 
+    pnames = ('A', 'B', 'phi', 'C', 'D', 'chi')
+
     for fname in args:
         pts = read_single(fname)[3]
         if asym:
             mfit1 = mieze_fit(pts, asym=False)
             mfit2 = mieze_fit(pts, asym=True)
-            print fname+'[s]:', pformat(mfit1)
-            print fname+'[a]:', pformat(mfit2)
+            print fname+'[s]:', pformat(pnames, mfit1)
+            print fname+'[a]:', pformat(pnames, mfit2)
             if plotting:
                 plotinfo(fname, pts, mfit1, mfit2)
         elif addup:
             mfit1 = mieze_fit(pts, addup=False)
             mfit2 = mieze_fit(pts, addup=True)
-            print fname+'[s]:', pformat(mfit1)
-            print fname+'[a]:', pformat(mfit2)
+            print fname+'[s]:', pformat(pnames, mfit1)
+            print fname+'[a]:', pformat(pnames, mfit2)
             if plotting:
                 plotinfo(fname, pts, mfit1, mfit2)
         else:
             mfit = mieze_fit(pts)
-            print fname+':', pformat(mfit)
+            print fname+':', pformat(pnames, mfit)
             if plotting:
                 plotinfo(fname, pts, mfit)
 

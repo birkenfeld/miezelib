@@ -1,22 +1,26 @@
 import sys
 import getopt
 
-from numpy import array, arange, sqrt, sin, pi
+from numpy import array, arange, sqrt, sin, pi, power, linspace
 from scipy.odr import RealData, Model, ODR
+from scipy.optimize import leastsq
 
-def _miez_signal(beta, x):
+from miezutil import dprint
+from miezplot import figure
+
+def model_miez_signal(beta, x):
     return beta[1] + beta[0]*sin(4*pi/16 * x + beta[2])
-_miez_fit_model = Model(_miez_signal)
+_miez_fit_model = Model(model_miez_signal)
 
-def _miez_signal_asym(beta, x):
+def model_miez_signal_asym(beta, x):
     return beta[1] + beta[0]*sin(4*pi/16 * x + beta[2]) \
            * (1 + beta[3]*sin(4*pi/64 * x + beta[4]))
-_miez_fit_model_asym = Model(_miez_signal_asym)
+_miez_fit_model_asym = Model(model_miez_signal_asym)
 
 def plotinfo(filename, pts, info1, info2=None):
     from matplotlib import pyplot as plt
 
-    plt.figure()
+    fig = figure()
     ax = plt.gca()
 
     params, errors = info1
@@ -37,18 +41,22 @@ def plotinfo(filename, pts, info1, info2=None):
     ax.errorbar(arange(1, 17), pts, sqrt(pts), fmt='ro')
 
     xs = arange(0, 16, 0.1)
-    ys = _miez_signal((params['A'], params['B'], params['phi']), xs)
+    ys = model_miez_signal((params['A'], params['B'], params['phi']), xs)
     ax.plot(xs, ys, 'b-')
     if info2 is not None:
-        ys2 = _miez_signal_asym((params2['A'], params2['B'], params2['phi'],
-                                 params2['D'], params2['chi']), xs)
+        ys2 = model_miez_signal_asym((params2['A'], params2['B'], params2['phi'],
+                                      params2['D'], params2['chi']), xs)
         ax.plot(xs, ys2, 'g-')
     ax.set_ylim(ymin=0)
 
-def mieze_fit(data, asym=False):
+def mieze_fit(data, asym=False, addup=False):
     # for the moment, only fit points 2 to 15
     x = arange(2, len(data))
     y = array(data[1:-1])
+
+    if addup:
+        x = x[0:6]
+        y = (y[:6] + y[8:]) / 2
 
     dat = RealData(x, y, sy=sqrt(y))
     est_A = (y.max() - y.min())/2
@@ -103,28 +111,119 @@ def pformat((params, errors)):
            ' '.join((('d%s=%%(%s).7g' % (i, i)) % errors).ljust(10)
                     for i in pnames)
 
-def read_measurement(fname):
-    counts = []
-    for line in file(fname):
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        counts.append(int(line))
-    return counts
+# -- fitting helpers -----------------------------------------------------------
+
+class FitResult(object):
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
+    def __str__(self):
+        if self._failed:
+            return 'Fit %-20s failed' % self._name
+        elif self._method == 'ODR':
+            return 'Fit %-20s success (  ODR  ), chi2: %8.3g, params: %s' % (
+                self._name or '', self.chi2,
+                ', '.join('%s = %8.3g +/- %8.3g' % v for v in zip(*self._pars)))
+        else:
+            return 'Fit %-20s success (leastsq), chi2: %8.3g, params: %s' % (
+                self._name or '', self.chi2,
+                ', '.join('%s = %8.3g' % v[:2] for v in zip(*self._pars)))
+
+    def __nonzero__(self):
+        return not self._failed
 
 
-def main(args):
-    opts, args = getopt.getopt(args, 'pa')
+class Fit(object):
+    def __init__(self, model, parnames=None, parstart=None,
+                 xmin=None, xmax=None, allow_leastsq=True):
+        self.model = model
+        self.parnames = parnames or []
+        self.parstart = parstart or []
+        self.xmin = xmin
+        self.xmax = xmax
+        self.allow_leastsq = allow_leastsq
+        if len(self.parnames) != len(self.parstart):
+            raise RuntimeError('number of param names must match number '
+                               'of starting values')
+
+    def par(self, name, start):
+        self.parnames.append(name)
+        self.parstart.append(start)
+
+    def run(self, name, x, y, dy):
+        if len(x) < 2:
+            # need at least two points to fit
+            return self.result(name, None, x, y, dy, None, None)
+        # try fitting with ODR
+        data = RealData(x, y, sy=dy)
+        # fit with fixed x values
+        odr = ODR(data, Model(self.model), beta0=self.parstart,
+                  ifixx=array([0]*len(x)))
+        out = odr.run()
+        if 1 <= out.info <= 3:
+            return self.result(name, 'ODR', x, y, dy, out.beta, out.sd_beta)
+        else:
+            # if it doesn't converge, try leastsq (doesn't consider errors)
+            try:
+                if not self.allow_leastsq:
+                    raise TypeError
+                out = leastsq(lambda v: self.model(v, x) - y, self.parstart)
+            except TypeError:
+                return self.result(name, None, x, y, dy, None, None)
+            if out[1] <= 4:
+                return self.result(name, 'leastsq', x, y, dy, out[0],
+                                   parerrors=[0]*len(out[0]))
+            else:
+                return self.result(name, None, x, y, dy, None, None)
+
+    def result(self, name, method, x, y, dy, parvalues, parerrors):
+        if method is None:
+            dct = {'_name': name, '_failed': True}
+        else:
+            dct = {'_name': name, '_method': method, '_failed': False,
+                   '_pars': (self.parnames, parvalues, parerrors)}
+            for name, val, err in zip(self.parnames, parvalues, parerrors):
+                dct[name] = val
+                dct['d' + name] = err
+            if self.xmin is None:
+                xmin = x[0]
+            else:
+                xmin = self.xmin
+            if self.xmax is None:
+                xmax = x[-1]
+            else:
+                xmax = self.xmax
+            dct['curve_x'] = linspace(xmin, xmax, 1000)
+            dct['curve_y'] = self.model(parvalues, dct['curve_x'])
+            ndf = len(x) - len(parvalues)
+            residuals = self.model(parvalues, x) - y
+            dct['chi2'] = sum(power(residuals, 2) / power(dy, 2)) / ndf
+        result = FitResult(**dct)
+        dprint(result)
+        return result
+
+
+def fit_main(args):
+    from miezdata import read_single
+    opts, args = getopt.getopt(args, 'pas')
     opts = dict(opts)
 
     plotting = '-p' in opts
     asym = '-a' in opts
+    addup = '-s' in opts
 
     for fname in args:
-        pts = read_measurement(fname)
+        pts = read_single(fname)[3]
         if asym:
-            mfit1 = mieze_fit(pts, False)
-            mfit2 = mieze_fit(pts, True)
+            mfit1 = mieze_fit(pts, asym=False)
+            mfit2 = mieze_fit(pts, asym=True)
+            print fname+'[s]:', pformat(mfit1)
+            print fname+'[a]:', pformat(mfit2)
+            if plotting:
+                plotinfo(fname, pts, mfit1, mfit2)
+        elif addup:
+            mfit1 = mieze_fit(pts, addup=False)
+            mfit2 = mieze_fit(pts, addup=True)
             print fname+'[s]:', pformat(mfit1)
             print fname+'[a]:', pformat(mfit2)
             if plotting:
@@ -141,4 +240,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    fit_main(sys.argv[1:])

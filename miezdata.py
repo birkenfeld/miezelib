@@ -55,9 +55,8 @@ def read_single(fn):
         if line.startswith('#'):
             if in_vallist and 'is at' in line:
                 m = vv_re.match(line)
-                if m:
-                    varvalues[m.group(1)] = float(m.group(2))
-            elif line.startswith('# Data set:'):
+                if m: varvalues[m.group(1)] = float(m.group(2))
+            elif line.startswith('# MIEZE status:'):
                 in_vallist = False
             elif line.startswith('# MIEZE setting'):
                 setting = line[16:]

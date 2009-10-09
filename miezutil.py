@@ -1,6 +1,16 @@
+# -*- coding: utf-8 -*-
+"""
+    miezelib: miezutil
+    ~~~~~~~~~~~~~~~~~~
+
+    Utility routines for miezelib.
+
+    :copyright: 2008-2009 by Georg Brandl.
+    :license: BSD.
+"""
+
 import re
 
-# -- debugging helpers ---------------------------------------------------------
 
 DEBUG = False
 
@@ -13,7 +23,15 @@ def dprint(*args):
         for arg in args: print arg,
         print
 
-# -- helper for calculating tau_MIEZE and formatting numbers -------------------
+
+def format_tex(val, prec):
+    """Format a number for TeX display."""
+    num = '%.*g' % (prec, val)
+    if 'e' in num:
+        num = num.replace('e-0', 'e-')
+        num = num.replace('e', '\\cdot 10^{') + '}'
+    return num
+
 
 M_N = 1.6749e-27
 H   = 6.6261e-34
@@ -28,11 +46,3 @@ def mieze_time(lam, L_s, setting):
     if bs: dOmega *= 2
     tau = (prefactor * lam**3 * dOmega * L_s) * 1e12  # in ps
     return tau
-
-def format_tex(val, prec):
-    """Format a number for TeX display."""
-    num = '%.*g' % (prec, val)
-    if 'e' in num:
-        num = num.replace('e-0', 'e-')
-        num = num.replace('e', '\\cdot 10^{') + '}'
-    return num

@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+    miezelib: miezdata
+    ~~~~~~~~~~~~~~~~~~
+
+    Routines for reading and analysing MIEZE data.
+
+    :copyright: 2008-2009 by Georg Brandl.
+    :license: BSD.
+"""
+
 import os
 import re
 import sys
@@ -17,6 +28,7 @@ _datadir = '.'
 def setdatadir(dir):
     global _datadir
     _datadir = dir
+
 
 # -- raw data reading ----------------------------------------------------------
 

@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+    miezelib: miezfit
+    ~~~~~~~~~~~~~~~~~
+
+    Fitting routines for general and MIEZE data.
+
+    :copyright: 2008-2009 by Georg Brandl.
+    :license: BSD.
+"""
+
 import sys
 import getopt
 
@@ -8,14 +19,21 @@ from scipy.optimize import leastsq
 from miezutil import dprint
 from miezplot import figure
 
+
+# -- fitting models ------------------------------------------------------------
+
 def model_miez_signal(beta, x):
     return beta[1] + beta[0]*sin(4*pi/16 * x + beta[2])
-_miez_fit_model = Model(model_miez_signal)
 
 def model_miez_signal_asym(beta, x):
     return beta[1] + beta[0]*sin(4*pi/16 * x + beta[2]) \
            * (1 + beta[3]*sin(4*pi/64 * x + beta[4]))
-_miez_fit_model_asym = Model(model_miez_signal_asym)
+
+odr_model_miez_signal = Model(model_miez_signal)
+odr_model_miez_signal_asym = Model(model_miez_signal_asym)
+
+
+# -- fitting models ------------------------------------------------------------
 
 def plotinfo(filename, pts, info1, info2=None):
     from matplotlib import pyplot as plt
@@ -66,13 +84,13 @@ def mieze_fit(data, asym=False, addup=False):
     est_phi = pi/2 - 4*pi/16*y.argmin() or 0.01
     beta0 = [est_A, est_B, est_phi]
     parnames = ['A', 'B', 'phi']
-    model = _miez_fit_model
+    model = odr_model_miez_signal
     if asym:
         parnames.append('D')
         parnames.append('chi')
         beta0.append(0)
         beta0.append(0)
-        model = _miez_fit_model_asym
+        model = odr_model_miez_signal_asym
     odr = ODR(dat, model, beta0=beta0, ifixx=array([0]*len(x)))
     out = odr.run()
     params = dict(zip(parnames, out.beta))
@@ -110,6 +128,7 @@ def pformat((params, errors)):
            ' || ' + \
            ' '.join((('d%s=%%(%s).7g' % (i, i)) % errors).ljust(10)
                     for i in pnames)
+
 
 # -- fitting helpers -----------------------------------------------------------
 

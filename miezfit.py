@@ -165,27 +165,37 @@ class Fit(object):
         if len(x) < 2:
             # need at least two points to fit
             return self.result(name, None, x, y, dy, None, None)
+        xn, yn, dyn = [], [], []
+        for i, v in enumerate(x):
+            if self.xmin is not None and v < self.xmin:
+                continue
+            if self.xmax is not None and v > self.xmax:
+                continue
+            xn.append(v)
+            yn.append(y[i])
+            dyn.append(dy[i])
+        xn, yn, dyn = array(xn), array(yn), array(dyn)
         # try fitting with ODR
-        data = RealData(x, y, sy=dy)
+        data = RealData(xn, yn, sy=dyn)
         # fit with fixed x values
         odr = ODR(data, Model(self.model), beta0=self.parstart,
-                  ifixx=array([0]*len(x)))
+                  ifixx=array([0]*len(xn)))
         out = odr.run()
         if 1 <= out.info <= 3:
-            return self.result(name, 'ODR', x, y, dy, out.beta, out.sd_beta)
+            return self.result(name, 'ODR', xn, yn, dyn, out.beta, out.sd_beta)
         else:
             # if it doesn't converge, try leastsq (doesn't consider errors)
             try:
                 if not self.allow_leastsq:
                     raise TypeError
-                out = leastsq(lambda v: self.model(v, x) - y, self.parstart)
+                out = leastsq(lambda v: self.model(v, xn) - yn, self.parstart)
             except TypeError:
-                return self.result(name, None, x, y, dy, None, None)
+                return self.result(name, None, xn, yn, dyn, None, None)
             if out[1] <= 4:
-                return self.result(name, 'leastsq', x, y, dy, out[0],
+                return self.result(name, 'leastsq', xn, yn, dyn, out[0],
                                    parerrors=[0]*len(out[0]))
             else:
-                return self.result(name, None, x, y, dy, None, None)
+                return self.result(name, None, xn, yn, dyn, None, None)
 
     def result(self, name, method, x, y, dy, parvalues, parerrors):
         if method is None:

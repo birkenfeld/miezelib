@@ -46,3 +46,10 @@ def mieze_time(lam, L_s, setting):
     if bs: dOmega *= 2
     tau = (prefactor * lam**3 * dOmega * L_s) * 1e12  # in ps
     return tau
+
+
+def pformat(pnames, (params, errors)):
+    return (
+        ' '.join((('%s=%%(%s).9g' % (i,i)) % params).ljust(12) for i in pnames) +
+        ' || ' +
+        ' '.join((('d%s=%%(%s).7g' % (i,i)) % errors).ljust(10) for i in pnames))

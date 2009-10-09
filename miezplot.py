@@ -330,12 +330,8 @@ class MiezeDataPlot(object):
                 continue
 
             ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
-            if res.Gamma < (self.data.resolution or 0.05):
-                # Gamma is below instrumental resolution
-                text = '$\Gamma = 0$'
-            else:
-                text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
-                       (format_tex(res.Gamma, 2), format_tex(res.dGamma, 2))
+            text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
+                   (format_tex(res.Gamma, 2), format_tex(res.dGamma, 2))
             # display the Gamma value as text
             ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             if log:

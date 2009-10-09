@@ -21,8 +21,10 @@ ml_figure = miezplot.figure
 ml_gammaplot = miezplot.gammaplot
 
 MiezeData = miezdata.MiezeData
+MiezeDataNF = miezdata.MiezeDataNF
 Fit = miezfit.Fit
 pl = miezplot.pl
 
-__all__ = ['MiezeData', 'Fit', 'np', 'sp', 'pl', 'ml_mieze_time',
-           'ml_debug', 'ml_setdatadir', 'ml_figure', 'ml_gammaplot']
+__all__ = ['MiezeData', 'MiezeDataNF', 'Fit', 'np', 'sp', 'pl',
+           'ml_mieze_time', 'ml_debug', 'ml_setdatadir', 'ml_figure',
+           'ml_gammaplot']

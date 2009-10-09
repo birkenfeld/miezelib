@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import copy
+from os import path
 from itertools import groupby
 
 import numpy as np
@@ -54,7 +55,11 @@ def read_summary(fn):
 pm_re = re.compile(r'([0-9e.]+)\s+\+/-\s+([0-9e.]+)')
 vv_re = re.compile(r'# ([a-zA-Z0-9_]+)\s+is at\s+([0-9e.]+)')
 
+_single_cache = {}
+
 def read_single(fn):
+    if fn in _single_cache:
+        return _single_cache[fn]
     varvalues = {}
     setting = preset = monitor = None
     counts, params, errors = [], [0, 0, 0, 0], [0, 0, 0, 0]
@@ -94,7 +99,9 @@ def read_single(fn):
                 errors[3] = float(m.group(2))
         else:
             counts.append(int(line))
-    return varvalues, setting, preset, counts, params, errors, monitor
+    ret = varvalues, setting, preset, counts, params, errors, monitor
+    _single_cache[fn] = ret
+    return ret
 
 
 # -- data objects --------------------------------------------------------------
@@ -214,6 +221,10 @@ class MiezeMeasurement(object):
         if not res:
             return None
         res.Gamma = abs(res.Gamma)
+        res.dGamma = max(res.dGamma, self.data.resolution)
+        if res.Gamma < self.data.resolution:
+            res.Gamma = 0
+            res.dGamma = self.data.resolution
         self.fitvalues = (res.Gamma, res.dGamma, res.chi2)
         return res
 
@@ -229,7 +240,7 @@ class MiezeData(object):
         self.variable = variable
         self.var_norm = var_norm
         self.var_back = var_back
-        self.resolution = resolution
+        self.resolution = resolution or 0.025  # in mueV
         self.mess = {}
         self.norm = {}
         self.back = {}
@@ -250,9 +261,9 @@ class MiezeData(object):
             group = ipars[0]
         if isinstance(file, int):
             file = 'mieze_%08d' % file
-        file = os.path.join(_datadir, file)
-        if os.path.isdir(file):
-            file = os.path.join(file, 'summary')
+        file = path.join(_datadir, file)
+        if path.isdir(file):
+            file = path.join(file, 'summary')
         data, fcomments = read_summary(file)
         for fcomment in fcomments:
             if fcomment.endswith('file'):
@@ -268,6 +279,9 @@ class MiezeData(object):
         for row in data:
             point = dict(zip(fields, row))
             point['summaryfile'] = file
+            point['singlefile'] = path.join(path.dirname(file),
+                                            '%05d' % int(point['in file']))
+            point = self.process_point(point)
             if 'tau' not in point or point['tau'] == '-':
                 assert ipars, \
                        'lam and L_s not given, but tau not in data file'
@@ -290,6 +304,9 @@ class MiezeData(object):
                         continue
                 dct[point['tau']] = point
 
+    def process_point(self, point):
+        return point
+
     def read_data(self, file, varvalue=None, vals=None, ipars=None, group=None):
         self.read_file(file, self.mess, True, varvalue, vals, None,
                        ipars, group)
@@ -306,9 +323,9 @@ class MiezeData(object):
         dprint('read file', file, 'as background')
 
     def _filenames(self, meas, graph, bkgrd):
-        fn = lambda p: os.path.join(os.path.dirname(p['summaryfile']),
-                                    '%05d' % int(p['in file']))
-        return (fn(meas), graph and fn(graph) or '', bkgrd and fn(bkgrd) or '')
+        return (meas['singlefile'],
+                graph and graph['singlefile'] or '',
+                bkgrd and bkgrd['singlefile'] or '')
 
     def get_data(self, ycol='C', varvalues=ALL, varvaluerange=None):
         if varvalues is ALL:
@@ -339,6 +356,18 @@ class MiezeData(object):
         from miezplot import MiezeDataPlot
         plot = MiezeDataPlot(self)
         return plot.plot_data(**kwds)
+
+
+class MiezeDataNF(MiezeData):
+    def process_point(self, point):
+        from miezfit import mieze_fit
+        info = read_single(point['singlefile'])
+        if point['setting'] == '200_300':
+            p, e = mieze_fit(info[3], addup=True)
+            for n in ('A', 'B', 'C', 'phi'):
+                point[n] = p[n]
+                point['delta '+n] = e[n]
+        return point
 
 
 if __name__ == '__main__':

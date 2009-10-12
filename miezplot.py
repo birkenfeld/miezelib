@@ -72,7 +72,8 @@ def show():
 
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
-              critical=None, secondary=None, seclabel=None):
+              critical=None, secondary=None, seclabel=None, xlabel=None,
+              xscale=None):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
@@ -116,6 +117,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     dy.append(res.dGamma)
         if critical:
             x = map(lambda v: v - critical, x)
+        if xscale:
+            x = map(lambda v: v * xscale, x)
 
         ax.errorbar(x, y, dy, marker='o', ls='')
 
@@ -154,7 +157,9 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
 
         ax.axhline(y=0, color='#cccccc', zorder=-1)
         ax.set_xlim(x[0]-0.1, x[-1]+0.1)
-        if critical:
+        if xlabel is not None:
+            ax.set_xlabel(xlabel, size=textsize)
+        elif critical:
             ax.set_xlabel('$%s-%s_c\\,[\\mathrm{%s}]$' % (
                 meas.data.variable, meas.data.variable, meas.data.unit),
                           size=textsize)

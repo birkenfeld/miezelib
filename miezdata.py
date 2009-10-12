@@ -210,13 +210,13 @@ class MiezeMeasurement(object):
 
     def _fit_model(self, v, x):
         # to get gamma in mueV, conversion factor is hbar = 658.2 mueV*ps
-        return v[1]*np.exp(-abs(v[0])*x/658.2)
+        return np.exp(-abs(v[0])*x/658.2)
 
     def fit(self, name=None, **kwds):
         from miezfit import Fit
         name = '%s %s' % (name or '', self.label)
         x, y, dy = self.as_arrays()[:3]
-        res = Fit(self._fit_model, ['Gamma', 'c'], [0, 1], **kwds).\
+        res = Fit(self._fit_model, ['Gamma'], [0], **kwds).\
               run(name, x, y, dy)
         if not res:
             return None

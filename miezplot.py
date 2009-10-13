@@ -72,17 +72,21 @@ def show():
 
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
-              critical=None, secondary=None, seclabel=None, xlabel=None,
-              xscale=None):
+              critical=None, secondary=None, seclabel=None, secspline=True,
+              xlabel=None, xscale=None, ylims=None, bottom=None, top=None,
+              left=None, right=None, wspace=None, hspace=None):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
     ndata = len(data)
     if figsize is None:
-        figsize = (3*ndata, 4)
+        figsize = (3*ndata + 1.5, 4)
     fig = figure(title, titlesize=titlesize, figsize=figsize)
-    fig.subplots_adjust(left=0.1, right=0.92, top=0.83, bottom=0.2,
-                        wspace=0.08)
+    defleft  = [0.18, 0.11, 0.08, 0.05][min(ndata-1, 3)]
+    defright = [0.85, 0.91, 0.94, 0.97][min(ndata-1, 3)]
+    fig.subplots_adjust(left=left or defleft, right=right or defright,
+                        top=top or 0.83, bottom=bottom or 0.16,
+                        wspace=wspace or 0.09, hspace=hspace)
     axes, ylimits = [], []
     twaxes, twylimits = [], []
     fitresults = []
@@ -100,7 +104,9 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         twax = ax.twinx()
         # draw sum axes before gamma axes so that the latter is
         # in front (zorder doesn't help here)
-        #ax.figure.axes[:] = [twax, ax]
+        ax.figure.axes[-2:] = [twax, ax]
+        ax.set_frame_on(False)
+        twax.set_frame_on(True)
 
         # primary data: Gamma
         x, y, dy = [], [], []
@@ -137,6 +143,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         if secondary:
             if seclabel is None:
                 seclabel = '$\\mathrm{Intensity\\,[a.u.]}$'
+            else:
+                seclabel = mklabel(seclabel)
             tx, ty, tdy = [], [], []
             data =  secondary[j]
             if data is not None:
@@ -148,17 +156,22 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tdy.append(np.average(mdy) * 1000)
                 if critical:
                     tx = map(lambda v: v - critical, tx)
-                twax.errorbar(tx, ty, tdy, fmt='rh')
-                splx = np.linspace(tx[0], tx[-1], 100)
-                sply = splev(splx, splrep(tx, ty))
-                twax.plot(splx, sply, 'r--')
+                if secspline:
+                    twax.errorbar(tx, ty, tdy, fmt='rh')
+                    splx = np.linspace(tx[0], tx[-1], 100)
+                    sply = splev(splx, splrep(tx, ty))
+                    twax.plot(splx, sply, 'r--')
+                else:
+                    twax.errorbar(tx, ty, tdy, fmt='rh--')
+                twax.axhline(y=0, color='#cccccc', zorder=-1)
                 twaxes.append(twax)
                 twylimits.append(twax.get_ylim())
+        else:
+            ax.axhline(y=0, color='#cccccc')
 
-        ax.axhline(y=0, color='#cccccc', zorder=-1)
         ax.set_xlim(x[0]-0.1, x[-1]+0.1)
         if xlabel is not None:
-            ax.set_xlabel(xlabel, size=textsize)
+            ax.set_xlabel(mklabel(xlabel), size=textsize)
         elif critical:
             ax.set_xlabel('$%s-%s_c\\,[\\mathrm{%s}]$' % (
                 meas.data.variable, meas.data.variable, meas.data.unit),
@@ -200,7 +213,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                 for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
                     t.label2On = False
 
-        pl.text(0.9, 0.92, title, size=textsize,
+        pl.text(0.9, 0.92, mktitle(title), size=textsize,
                 horizontalalignment='right',
                 verticalalignment='top',
                 transform=pl.gca().transAxes)
@@ -219,11 +232,43 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
     if twaxes:
         _scale_equal(twaxes, twylimits)
 
+    if ylims is not None:
+        for ax, twax, ylim in zip(axes, twaxes, ylims):
+            if ylim is None:
+                continue
+            relimit(ax, twax, *ylim)
+
     if filename is not None:
         fig.savefig(filename)
         dprint('Wrote', title or 'gammaplot', 'to', filename)
 
     return axes, twaxes, fitresults
+
+
+def mklabel(label):
+    if isinstance(label, tuple):
+        return r'$%s\,[\mathrm{%s}]$' % label
+    else:
+        return label
+
+def mktitle(label):
+    if isinstance(label, tuple):
+        return r'$%s=%s\,\mathrm{%s}$' % label
+    else:
+        return label
+
+
+def relimit(ax, twax, ymin=None, ymax=None):
+    axmin, axmax = ax.get_ylim()
+    twmin, twmax = twax.get_ylim()
+    scale = twmax/axmax
+
+    if ymin:
+        ax.set_ylim(ymin=ymin)
+        twax.set_ylim(ymin=ymin*scale)
+    if ymax:
+        ax.set_ylim(ymax=ymax)
+        twax.set_ylim(ymax=ymax*scale)
 
 
 def miezeplot(filenames, infos):

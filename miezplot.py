@@ -73,8 +73,8 @@ def show():
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None, secspline=True,
-              xlabel=None, xscale=None, ylims=None, bottom=None, top=None,
-              left=None, right=None, wspace=None, hspace=None):
+              xlabel=None, xscale=None, ylims=None, xlim=None, bottom=None,
+              top=None, left=None, right=None, wspace=None, hspace=None):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
@@ -83,7 +83,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         figsize = (3*ndata + 1.5, 4)
     fig = figure(title, titlesize=titlesize, figsize=figsize)
     defleft  = [0.18, 0.11, 0.08, 0.05][min(ndata-1, 3)]
-    defright = [0.85, 0.91, 0.94, 0.97][min(ndata-1, 3)]
+    defright = [0.84, 0.91, 0.94, 0.97][min(ndata-1, 3)]
     fig.subplots_adjust(left=left or defleft, right=right or defright,
                         top=top or 0.83, bottom=bottom or 0.16,
                         wspace=wspace or 0.09, hspace=hspace)
@@ -169,7 +169,10 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         else:
             ax.axhline(y=0, color='#cccccc')
 
-        ax.set_xlim(x[0]-0.1, x[-1]+0.1)
+        if xlim:
+            ax.set_xlim(xlim)
+        else:
+            ax.set_xlim(x[0]-0.1, x[-1]+0.1)
         if xlabel is not None:
             ax.set_xlabel(mklabel(xlabel), size=textsize)
         elif critical:

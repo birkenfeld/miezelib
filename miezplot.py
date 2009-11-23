@@ -50,15 +50,29 @@ def on_key_release(event):
             ax.set_xscale('log')
         ax.set_ylim(ylim)
         ax.figure.canvas.draw()
+    elif event.key == 'r':
+        # log scaling of secondary axis (XXX gammaplot specific)
+        oax = event.inaxes
+        if not oax:
+            return
+        ax = oax.figure.axes[0]
+        if ax is oax:
+            return
+        scale = ax.get_yscale()
+        if scale == 'log':
+            ax.set_yscale('linear')
+        else:
+            ax.set_yscale('log')
+        oax.figure.canvas.draw()
 
 
-def figure(suptitle=None, titlesize='x-large', **kwargs):
+def figure(suptitle=None, titlesize='x-large', titley=0.95, **kwargs):
     """Create a new figure with special key handler."""
     pl.rc('font', family='Lucida Grande')
     fig = pl.figure(**kwargs)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
     if suptitle:
-        fig.suptitle(suptitle, size=titlesize, y=0.95)
+        fig.suptitle(suptitle, size=titlesize, y=titley)
     return fig
 
 
@@ -73,7 +87,7 @@ def show():
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None, secspline=True,
-              xlabel=None, xscale=None, ylims=None, xlim=None, bottom=None,
+              xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
               top=None, left=None, right=None, wspace=None, hspace=None):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
@@ -123,8 +137,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     dy.append(res.dGamma)
         if critical:
             x = map(lambda v: v - critical, x)
-        if xscale:
-            x = map(lambda v: v * xscale, x)
+        if xtransform:
+            x = map(xtransform, x)
 
         ax.errorbar(x, y, dy, marker='o', ls='')
 
@@ -156,6 +170,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tdy.append(np.average(mdy) * 1000)
                 if critical:
                     tx = map(lambda v: v - critical, tx)
+                if xtransform:
+                    tx = map(xtransform, tx)
                 if secspline:
                     twax.errorbar(tx, ty, tdy, fmt='rh')
                     splx = np.linspace(tx[0], tx[-1], 100)
@@ -334,7 +350,7 @@ class MiezeDataPlot(object):
         self.collections = weakref.WeakKeyDictionary()
 
     def plot_data(self, filename=None, title=None, legend=False, **kwds):
-        fig = figure(title or self.name)
+        fig = figure(title or self.name, titley=0.98)
         ret = self.plot(fig, **kwds)
         if legend:
             fig.gca().legend(loc=(1,0))

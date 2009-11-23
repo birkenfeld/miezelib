@@ -58,6 +58,8 @@ vv_re = re.compile(r'# ([a-zA-Z0-9_]+)\s+is at\s+([0-9e.]+)')
 _single_cache = {}
 
 def read_single(fn):
+    if fn == '':
+        return None
     if fn in _single_cache:
         return _single_cache[fn]
     varvalues = {}

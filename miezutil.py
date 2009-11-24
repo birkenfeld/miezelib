@@ -13,6 +13,7 @@ import re
 
 
 DEBUG = False
+NOPLOT = False
 
 def debug(debug=True):
     global DEBUG
@@ -22,6 +23,10 @@ def dprint(*args):
     if DEBUG:
         for arg in args: print arg,
         print
+
+def noplot(np=True):
+    global NOPLOT
+    NOPLOT = np
 
 
 def format_tex(val, prec):

@@ -19,6 +19,7 @@ from itertools import groupby
 import numpy as np
 
 from miezutil import dprint, mieze_time
+import miezutil
 
 ALL = object()
 
@@ -324,6 +325,33 @@ class MiezeData(object):
                        onlyval, ipars, group)
         dprint('read file', file, 'as background')
 
+    def remove(self, varvalue, tau=None):
+        if tau is None:
+            #[]
+            try:
+                del self.mess[varvalue]
+            except KeyError:
+                print 'remove: no point with varvalue %s' % varvalue
+        else:
+            try:
+                mess = self.mess[varvalue]
+            except KeyError:
+                print 'remove: no point with varvalue %s' % varvalue
+            if not isinstance(tau, str):
+                # given by real tau
+                try:
+                    del mess[tau]
+                except KeyError:
+                    print 'remove: no measurement with tau %s' % tau
+            else:
+                # given by setting:
+                for k, v in mess.items():
+                    if v['setting'] == tau:
+                        del mess[k]
+                        break
+                else:
+                    print 'remove: no measurement with setting %s' % tau
+
     def _filenames(self, meas, graph, bkgrd):
         return (meas['singlefile'],
                 graph and graph['singlefile'] or '',
@@ -355,6 +383,8 @@ class MiezeData(object):
         return measurements
 
     def plot_data(self, **kwds):
+        if miezutil.NOPLOT:
+            return self.get_data(**kwds)
         from miezplot import MiezeDataPlot
         plot = MiezeDataPlot(self)
         return plot.plot_data(**kwds)

@@ -55,8 +55,10 @@ def on_key_release(event):
         oax = event.inaxes
         if not oax:
             return
-        ax = oax.figure.axes[0]
-        if ax is oax:
+        for ax in oax.figure.axes:
+            if ax._sharex is oax:
+                break
+        else:
             return
         scale = ax.get_yscale()
         if scale == 'log':

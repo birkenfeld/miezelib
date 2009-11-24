@@ -172,7 +172,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tx = map(lambda v: v - critical, tx)
                 if xtransform:
                     tx = map(xtransform, tx)
-                if secspline:
+                if secspline and len(tx) > 3:
                     twax.errorbar(tx, ty, tdy, fmt='rh')
                     splx = np.linspace(tx[0], tx[-1], 100)
                     sply = splev(splx, splrep(tx, ty))

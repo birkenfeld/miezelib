@@ -88,18 +88,27 @@ def show():
 
 def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
-              critical=None, secondary=None, seclabel=None, secspline=True,
+              critical=None, secondary=None, seclabel=None, secspline=False,
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
-              top=None, left=None, right=None, wspace=None, hspace=None):
+              top=None, left=None, right=None, wspace=None, hspace=None,
+              legend=False, subplots=True):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
-    ndata = len(data)
+    if subplots:
+        nplots = len(data)
+        cycle1 = cycle(['b'])
+        cycle2 = cycle(['r'])
+    else:
+        nplots = 1
+        cycle1 = cycle(['b', 'g', 'r'])
+        cycle2 = cycle(['b', 'g', 'r'])
+
     if figsize is None:
-        figsize = (3*ndata + 1.5, 4)
+        figsize = (3*nplots + 1.5, 4)
     fig = figure(title, titlesize=titlesize, figsize=figsize)
-    defleft  = [0.18, 0.11, 0.08, 0.05][min(ndata-1, 3)]
-    defright = [0.84, 0.91, 0.94, 0.97][min(ndata-1, 3)]
+    defleft  = [0.18, 0.11, 0.08, 0.05][min(nplots-1, 3)]
+    defright = [0.84, 0.91, 0.94, 0.97][min(nplots-1, 3)]
     fig.subplots_adjust(left=left or defleft, right=right or defright,
                         top=top or 0.83, bottom=bottom or 0.16,
                         wspace=wspace or 0.09, hspace=hspace)
@@ -112,17 +121,31 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
     else:
         fits = fit
 
+    if not (len(data) == len(titles) == len(fits)):
+        print 'warning: different lengths for data/titles/fits lists'
+
+    ax = None
+    twax = None
+
     for j, (meass, title, fit) in enumerate(zip(data, titles, fits)):
         if title is None:
             title = meass[0].data.name
 
-        ax = fig.add_subplot(1, ndata, j+1)
-        twax = ax.twinx()
-        # draw sum axes before gamma axes so that the latter is
-        # in front (zorder doesn't help here)
-        ax.figure.axes[-2:] = [twax, ax]
-        ax.set_frame_on(False)
-        twax.set_frame_on(True)
+        if subplots:
+            ax = fig.add_subplot(1, nplots, j+1)
+            twax = ax.twinx()
+            # draw sum axes before gamma axes so that the latter is
+            # in front (zorder doesn't help here)
+            ax.figure.axes[-2:] = [twax, ax]
+            ax.set_frame_on(False)
+            twax.set_frame_on(True)
+        else:
+            if ax is None:
+                ax = fig.gca()
+                twax = ax.twinx()
+                ax.figure.axes[-2:] = [twax, ax]
+                ax.set_frame_on(False)
+                twax.set_frame_on(True)
 
         # primary data: Gamma
         x, y, dy = [], [], []
@@ -142,12 +165,14 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         if xtransform:
             x = map(xtransform, x)
 
-        ax.errorbar(x, y, dy, marker='o', ls='')
+        color = cycle1.next()
+        ax.errorbar(x, y, dy, color=color, marker='o', ls='',
+                    label=mktitle(title))
 
         if fit:
             res = fit.run(title, x, y, dy)
             if res:
-                ax.plot(res.curve_x, res.curve_y, '-')
+                ax.plot(res.curve_x, res.curve_y, color + '-')
             fitresults.append(res)
         else:
             fitresults.append(None)
@@ -174,13 +199,15 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     tx = map(lambda v: v - critical, tx)
                 if xtransform:
                     tx = map(xtransform, tx)
+                color = cycle2.next()
                 if secspline and len(tx) > 3:
-                    twax.errorbar(tx, ty, tdy, fmt='rh')
+                    twax.errorbar(tx, ty, tdy, fmt=color+'h')
                     splx = np.linspace(tx[0], tx[-1], 100)
                     sply = splev(splx, splrep(tx, ty))
-                    twax.plot(splx, sply, 'r--')
+                    twax.plot(splx, sply, color+'--')
                 else:
-                    twax.errorbar(tx, ty, tdy, fmt='rh--')
+                    twax.errorbar(tx, ty, tdy, fmt=color+'h--',
+                                  mfc='white', mec=color)
                 twax.axhline(y=0, color='#cccccc', zorder=-1)
                 twaxes.append(twax)
                 twylimits.append(twax.get_ylim())
@@ -190,7 +217,13 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         if xlim:
             ax.set_xlim(xlim)
         else:
-            ax.set_xlim(x[0]-0.1, x[-1]+0.1)
+            try:
+                lspace = abs(x[0]-x[1])/2
+                rspace = abs(x[-1]-x[-2])/2
+            except IndexError:
+                ax.set_xlim(x[0]-0.1, x[-1]+0.1)
+            else:
+                ax.set_xlim(x[0]-lspace, x[-1]+rspace)
         if xlabel is not None:
             ax.set_xlabel(mklabel(xlabel), size=textsize)
         elif critical:
@@ -203,41 +236,47 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                           size=textsize)
         pl.xticks(size=ticksize, verticalalignment='bottom', y=-0.08)
         pl.yticks(size=ticksize)
-        if j == 0:
-            # first plot
-            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize,
-                          color='blue')
-            if twax:
-                if ndata == 1:
+        if subplots:
+            if j == 0:
+                # first plot
+                ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize,
+                              color='blue')
+                if twax:
+                    if nplots == 1:
+                        twax.set_ylabel(seclabel, size=textsize, color='red')
+                    else:
+                        for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
+                            t.label2On = False
+            elif j == nplots - 1:
+                # last plot
+                if twax:
+                    # put only ticklabels on secondary axis
+                    for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                        t.label1On = False
                     twax.set_ylabel(seclabel, size=textsize, color='red')
                 else:
-                    for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
-                        t.label2On = False
-        elif j == ndata - 1:
-            # last plot
-            if twax:
-                # put only ticklabels on secondary axis
+                    # put ticklabels on right side (only for > 1 plot)
+                    ax.yaxis.set_ticks_position('right')
+                    for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
+                        t.tick1On = True
+                    pl.yticks(size=ticksize)
+            else:
+                # middle plots: no ticklabels
                 for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
                     t.label1On = False
-                twax.set_ylabel(seclabel, size=textsize, color='red')
-            else:
-                # put ticklabels on right side (only for > 1 plot)
-                ax.yaxis.set_ticks_position('right')
-                for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
-                    t.tick1On = True
-                pl.yticks(size=ticksize)
-        else:
-            # middle plots: no ticklabels
-            for t in ax.yaxis.majorTicks + ax.yaxis.minorTicks:
-                t.label1On = False
-            if twax:
-                for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
-                    t.label2On = False
+                if twax:
+                    for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
+                        t.label2On = False
 
-        pl.text(0.9, 0.92, mktitle(title), size=textsize,
-                horizontalalignment='right',
-                verticalalignment='top',
-                transform=pl.gca().transAxes)
+            pl.text(0.9, 0.92, mktitle(title), size=textsize,
+                    horizontalalignment='right',
+                    verticalalignment='top',
+                    transform=pl.gca().transAxes)
+        else:
+            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
+            if twax:
+                twax.set_ylabel(seclabel, size=textsize)
+                
 
     # make the Y scale equal for all plots
     def _scale_equal(axes, ylimits):
@@ -259,6 +298,9 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                 continue
             relimit(ax, twax, *ylim)
 
+    if legend:
+        axes[0].legend(loc=2)
+
     if filename is not None:
         fig.savefig(filename)
         dprint('Wrote', title or 'gammaplot', 'to', filename)
@@ -279,7 +321,7 @@ def mktitle(label):
         return label
 
 
-def relimit(ax, twax, ymin=None, ymax=None):
+def relimit(ax, twax, ymin=None, ymax=None, ymin2=None, ymax2=None):
     axmin, axmax = ax.get_ylim()
     twmin, twmax = twax.get_ylim()
     scale = twmax/axmax
@@ -290,6 +332,10 @@ def relimit(ax, twax, ymin=None, ymax=None):
     if ymax:
         ax.set_ylim(ymax=ymax)
         twax.set_ylim(ymax=ymax*scale)
+    if ymin2:
+        twax.set_ylim(ymin=ymin2)
+    if ymax2:
+        twax.set_ylim(ymax=ymax2)
 
 
 def miezeplot(filenames, infos):

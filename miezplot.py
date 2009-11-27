@@ -51,7 +51,7 @@ def on_key_release(event):
         ax.set_ylim(ylim)
         ax.figure.canvas.draw()
     elif event.key == 'r':
-        # log scaling of secondary axis (XXX gammaplot specific)
+        # log scaling of secondary axis
         oax = event.inaxes
         if not oax:
             return

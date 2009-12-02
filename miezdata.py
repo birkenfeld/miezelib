@@ -279,6 +279,7 @@ class MiezeData(object):
         if variable and varvalue is None:
             assert fields[0] == self.variable, \
                    'different variables in data files'
+        nread = 0
         for row in data:
             point = dict(zip(fields, row))
             point['summaryfile'] = file
@@ -301,11 +302,15 @@ class MiezeData(object):
                             continue
                     ddct = dct.setdefault(vv, {})
                 ddct[point['tau']] = point
+                nread += 1
             else:
                 if onlyval is not None:
                     if point[fields[1]] != onlyval:
                         continue
                 dct[point['tau']] = point
+                nread += 1
+        if not nread:
+            print 'Warning: no points read from file', file
 
     def process_point(self, point):
         return point

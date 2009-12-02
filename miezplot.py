@@ -90,6 +90,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None, secspline=False,
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
+              logscale=False, seclogscale=False, xlogscale=False, threesigma=True,
               top=None, left=None, right=None, wspace=None, hspace=None,
               legend=False, subplots=True):
     """Create a plot of Gamma versus variable quantity."""
@@ -166,8 +167,16 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
             x = map(xtransform, x)
 
         color = cycle1.next()
-        ax.errorbar(x, y, dy, color=color, marker='o', ls='',
-                    label=mktitle(title))
+        if len(x):
+            if threesigma:
+                ndy = map(lambda x: x*3, dy)
+            else:
+                ndy = dy
+            ax.errorbar(x, y, ndy, color=color, marker='o', ls='',
+                        label=mktitle(title))
+
+        if logscale:
+            ax.set_yscale('log')
 
         if fit:
             res = fit.run(title, x, y, dy)
@@ -209,11 +218,17 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     twax.errorbar(tx, ty, tdy, fmt=color+'h--',
                                   mfc='white', mec=color)
                 twax.axhline(y=0, color='#cccccc', zorder=-1)
+                if seclogscale:
+                    twax.set_yscale('log')
                 twaxes.append(twax)
                 twylimits.append(twax.get_ylim())
         else:
             ax.axhline(y=0, color='#cccccc')
 
+        if xlogscale:
+            ax.set_xscale('log')
+            if twax:
+                twax.set_xscale('log')
         if xlim:
             ax.set_xlim(xlim)
         else:

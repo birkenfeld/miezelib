@@ -92,7 +92,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
               logscale=False, seclogscale=False, xlogscale=False, threesigma=True,
               top=None, left=None, right=None, wspace=None, hspace=None,
-              legend=False, subplots=True):
+              legend=False, subplots=True, lefttitle=False):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
@@ -173,7 +173,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
             else:
                 ndy = dy
             ax.errorbar(x, y, ndy, color=color, marker='o', ls='',
-                        label=mktitle(title))
+                        label=mktitle(title) + ' (linewidth)')
 
         if logscale:
             ax.set_yscale('log')
@@ -216,7 +216,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     twax.plot(splx, sply, color+'--')
                 else:
                     twax.errorbar(tx, ty, tdy, fmt=color+'h--',
-                                  mfc='white', mec=color)
+                                  mfc='white', mec=color,
+                                  label=mktitle(title) + ' (intensity)')
                 twax.axhline(y=0, color='#cccccc', zorder=-1)
                 if seclogscale:
                     twax.set_yscale('log')
@@ -254,7 +255,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         if subplots:
             if j == 0:
                 # first plot
-                ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize,
+                ax.set_ylabel('$\\Delta\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize,
                               color='blue')
                 if twax:
                     if nplots == 1:
@@ -283,12 +284,16 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
                     for t in twax.yaxis.majorTicks + twax.yaxis.minorTicks:
                         t.label2On = False
 
-            pl.text(0.9, 0.92, mktitle(title), size=textsize,
-                    horizontalalignment='right',
+            titlecoords = (0.9, 0.92)
+            if lefttitle:
+                titlecoords = (0.1, 0.92)
+            pl.text(titlecoords[0], titlecoords[1],
+                    mktitle(title), size=textsize,
+                    horizontalalignment=lefttitle and 'left' or 'right',
                     verticalalignment='top',
                     transform=pl.gca().transAxes)
         else:
-            ax.set_ylabel('$\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
+            ax.set_ylabel('$\\Delta\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
             if twax:
                 twax.set_ylabel(seclabel, size=textsize)
                 
@@ -314,7 +319,8 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
             relimit(ax, twax, *ylim)
 
     if legend:
-        axes[0].legend(loc=2)
+        axes[0].legend(loc='upper left', bbox_to_anchor=(0, -0.15), fancybox=None)
+        twaxes[0].legend(loc='upper right', bbox_to_anchor=(1, -0.15), fancybox=None)
 
     if filename is not None:
         fig.savefig(filename)
@@ -489,10 +495,11 @@ class MiezeDataPlot(object):
                 continue
 
             ax.plot(res.curve_x, res.curve_y, 'm-', label='exp. fit')
-            text = r'$\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
+            text = r'$\Delta\Gamma = %s \pm %s\,\mathrm{\mu eV}$' % \
                    (format_tex(res.Gamma, 2), format_tex(res.dGamma, 2))
             # display the Gamma value as text
-            ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
+            if res.Gamma > 0:
+                ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             if log:
                 ax.set_yscale('log')
                 ax.set_ylim(ymin=1e-1, ymax=2)

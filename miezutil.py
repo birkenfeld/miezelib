@@ -5,17 +5,18 @@
 
     Utility routines for miezelib.
 
-    :copyright: 2008-2009 by Georg Brandl.
+    :copyright: 2008-2010 by Georg Brandl.
     :license: BSD.
 """
 
 import re
-
+import sys
+import getopt
 
 DEBUG = False
 NOPLOT = False
 
-def debug(debug=True):
+def setdebug(debug=True):
     global DEBUG
     DEBUG = debug
 
@@ -24,9 +25,38 @@ def dprint(*args):
         for arg in args: print arg,
         print
 
-def noplot(np=True):
+def setnoplot(np=True):
     global NOPLOT
     NOPLOT = np
+
+def cmdline():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'ndfxNDFX')
+    except getopt.error:
+        print 'Invalid options given.'
+        sys.exit(1)
+    for opt, arg in opts:
+        if opt == '-n':
+            setnoplot(True)
+        elif opt == '-N':
+            setnoplot(False)
+        elif opt == '-d':
+            setdebug(True)
+        elif opt == '-D':
+            setdebug(False)
+        elif opt == '-f':
+            from miezdata import setfreefit
+            setfreefit(True)
+        elif opt == '-F':
+            from miezdata import setfreefit
+            setfreefit(False)
+        elif opt == '-x':
+            from miezdata import setaltfit
+            setaltfit(True)
+        elif opt == '-X':
+            from miezdata import setaltfit
+            setaltfit(False)
+    sys.argv[1:] = args
 
 
 def format_tex(val, prec):

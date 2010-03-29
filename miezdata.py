@@ -28,7 +28,7 @@ ALL = object()
 _datadir = '.'
 _ipars = None
 _freefit = False
-_altfit = False
+_altfit = True
 
 
 def setdatadir(dir):
@@ -291,9 +291,9 @@ class MiezeData(object):
         self.var_norm = var_norm
         self.var_back = var_back
         self.resolution = resolution or 0.025  # in mueV
-        self.mess = {}
-        self.norm = {}
-        self.back = {}
+        self._data = {}
+        self._norm = {}
+        self._back = {}
         dprint('created new data object:', name)
 
     def __repr__(self):
@@ -371,29 +371,35 @@ class MiezeData(object):
         return point
 
     def read_data(self, file, varvalue=None, vals=None, ipars=None, group=None):
-        self.read_file(file, self.mess, True, varvalue, vals, None,
+        self.read_file(file, self._data, True, varvalue, vals, None,
                        ipars, group)
         dprint('read file', file, 'as data')
 
+    data = read_data
+
     def read_norm(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
-        self.read_file(file, self.norm, self.var_norm, varvalue, None,
+        self.read_file(file, self._norm, self.var_norm, varvalue, None,
                        onlyval, ipars, group)
         dprint('read file', file, 'as normalization')
 
+    norm = read_norm
+
     def read_back(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
-        self.read_file(file, self.back, self.var_back, varvalue, None,
+        self.read_file(file, self._back, self.var_back, varvalue, None,
                        onlyval, ipars, group)
         dprint('read file', file, 'as background')
+
+    back = read_back
 
     def remove(self, varvalue, tau=None):
         if tau is None:
             try:
-                del self.mess[varvalue]
+                del self._data[varvalue]
             except KeyError:
                 print 'remove: no point with varvalue %s' % varvalue
         else:
             try:
-                mess = self.mess[varvalue]
+                mess = self._data[varvalue]
             except KeyError:
                 print 'remove: no point with varvalue %s' % varvalue
             if not isinstance(tau, str):
@@ -420,22 +426,22 @@ class MiezeData(object):
         if varvalues is ALL:
             if varvaluerange is not None:
                 dmin, dmax = varvaluerange
-                varvalues = sorted(k for k in self.mess.keys()
+                varvalues = sorted(k for k in self._data.keys()
                                    if dmin <= k <= dmax)
             else:
-                varvalues = sorted(self.mess.keys())
+                varvalues = sorted(self._data.keys())
         measurements = []
         for varvalue in varvalues:
             measurement = MiezeMeasurement(self, ycol, varvalue)
-            for x, point in self.mess[varvalue].items():
+            for x, point in self._data[varvalue].items():
                 if self.var_norm:
-                    graph = self.norm[varvalue].get(x)
+                    graph = self._norm[varvalue].get(x)
                 else:
-                    graph = self.norm.get(x)
+                    graph = self._norm.get(x)
                 if self.var_back:
-                    bkgrd = self.back[varvalue].get(x)
+                    bkgrd = self._back[varvalue].get(x)
                 else:
-                    bkgrd = self.back.get(x)
+                    bkgrd = self._back.get(x)
                 files = self._filenames(point, graph, bkgrd)
                 measurement.add_point(x, point, graph, bkgrd, files)
             measurements.append(measurement)

@@ -5,7 +5,7 @@
 
     Routines for reading and analysing MIEZE data.
 
-    :copyright: 2008-2009 by Georg Brandl.
+    :copyright: 2008-2010 by Georg Brandl.
     :license: BSD.
 """
 
@@ -30,6 +30,12 @@ _datadir = '.'
 def setdatadir(dir):
     global _datadir
     _datadir = dir
+
+_freefit = False
+
+def setfreefit(freefit=True):
+    global _freefit
+    _freefit = freefit
 
 
 # -- raw data reading ----------------------------------------------------------
@@ -115,11 +121,15 @@ class MiezeMeasurement(object):
     def __init__(self, data, ycol, varvalue):
         self.varvalue = varvalue
         self.data = data
+        self.ycol = ycol
         self.fitvalues = None
         self._calc_point = getattr(self, '_calc_point_' + ycol)
 
         self.points = []
         self.arrays = None
+
+    def __repr__(self):
+        return '<MIEZE measurement at %s, ycol %s>' % (self.varvalue, self.ycol)
 
     def add_point(self, x, point, graph, bkgrd, files):
         y, dy = self._calc_point(point, graph, bkgrd)
@@ -194,6 +204,9 @@ class MiezeMeasurement(object):
             c = c/gc
         return c, dc
 
+    def _calc_point_phi(self, point, graph, bkgrd):
+        return point['phi'], point['delta phi'] + graph['delta phi']
+
     @property
     def label(self):
         return '%s %s' % (self.varvalue, self.data.unit)
@@ -216,6 +229,8 @@ class MiezeMeasurement(object):
         return np.exp(-abs(v[0])*x/658.2)
 
     def fit(self, name=None, **kwds):
+        if _freefit:
+            return self.freefit(name, **kwds)
         from miezfit import Fit
         name = '%s %s' % (name or '', self.label)
         x, y, dy = self.as_arrays()[:3]
@@ -229,6 +244,25 @@ class MiezeMeasurement(object):
             res.Gamma = 0
             res.dGamma = self.data.resolution
         self.fitvalues = (res.Gamma, res.dGamma, res.chi2)
+        return res
+
+    def _freefit_model(self, v, x):
+        return v[1] * np.exp(-abs(v[0])*x/658.2)
+
+    def freefit(self, name=None, **kwds):
+        from miezfit import Fit
+        name = '%s %s' % (name or '', self.label)
+        x, y, dy = self.as_arrays()[:3]
+        res = Fit(self._freefit_model, ['Gamma', 'C0'], [0, 1], **kwds).\
+              run(name, x, y, dy)
+        if not res:
+            return None
+        res.Gamma = abs(res.Gamma)
+        res.dGamma = max(res.dGamma, self.data.resolution)
+        if res.Gamma < self.data.resolution:
+            res.Gamma = 0
+            res.dGamma = self.data.resolution
+        self.fitvalues = (res.Gamma, res.dGamma, res.C0, res.dC0, res.chi2)
         return res
 
 

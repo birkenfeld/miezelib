@@ -5,7 +5,7 @@
 
     Plotting of MIEZE data.
 
-    :copyright: 2008-2009 by Georg Brandl.
+    :copyright: 2008-2010 by Georg Brandl.
     :license: BSD.
 """
 
@@ -90,7 +90,7 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None, secspline=False,
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
-              logscale=False, seclogscale=False, xlogscale=False, threesigma=True,
+              logscale=False, seclogscale=False, xlogscale=False, threesigma=False,
               top=None, left=None, right=None, wspace=None, hspace=None,
               legend=False, subplots=True, lefttitle=False):
     """Create a plot of Gamma versus variable quantity."""

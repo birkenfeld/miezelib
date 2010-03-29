@@ -5,7 +5,7 @@
 
     Compatibility interface.
 
-    :copyright: 2008-2009 by Georg Brandl.
+    :copyright: 2008-2010 by Georg Brandl.
     :license: BSD.
 """
 
@@ -17,6 +17,7 @@ import miezdata, miezfit, miezutil, miezplot
 ml_debug = miezutil.debug
 ml_mieze_time = miezutil.mieze_time
 ml_setdatadir = miezdata.setdatadir
+ml_setfreefit = miezdata.setfreefit
 ml_figure = miezplot.figure
 ml_gammaplot = miezplot.gammaplot
 ml_show = miezplot.show
@@ -29,4 +30,4 @@ pl = miezplot.pl
 
 __all__ = ['MiezeData', 'MiezeDataNF', 'Fit', 'np', 'sp', 'pl',
            'ml_mieze_time', 'ml_debug', 'ml_setdatadir', 'ml_figure',
-           'ml_gammaplot', 'ml_show', 'ml_noplot']
+           'ml_gammaplot', 'ml_show', 'ml_noplot', 'ml_setfreefit']

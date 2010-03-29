@@ -24,7 +24,7 @@ try:
 except ImportError:
     import pylab as pl
 
-from miezdata import read_single
+from miezdata import read_single, MiezeData
 from miezutil import dprint, format_tex
 
 
@@ -86,7 +86,7 @@ def show():
         pass
 
 
-def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
+def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None,
               filename=None, title=None, titlesize='xx-large', fit=None,
               critical=None, secondary=None, seclabel=None, secspline=False,
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
@@ -95,6 +95,21 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
               legend=False, subplots=True, lefttitle=False):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
+
+    # shortcut for plotting only one measurement
+    if data and isinstance(data, MiezeData):
+        if title is None:
+            title = data.name
+        data = [data]
+
+    # shortcut for plotting contrast and intensity
+    if data and isinstance(data[0], MiezeData) and not secondary:
+        measurements = data[:]
+        data = []
+        secondary = []
+        for m in measurements:
+            data.append(m.plot_data())
+            secondary.append(m.get_data(ycol='sum'))
 
     if subplots:
         nplots = len(data)
@@ -121,6 +136,9 @@ def gammaplot(data, titles, figsize=None, textsize='x-large', ticksize=None,
         fits = [fit] * len(data)
     else:
         fits = fit
+
+    if titles is None:
+        titles = [''] * len(data)
 
     if not (len(data) == len(titles) == len(fits)):
         print 'warning: different lengths for data/titles/fits lists'

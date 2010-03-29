@@ -23,19 +23,32 @@ import miezutil
 
 ALL = object()
 
-# -- data directory global setting ---------------------------------------------
+# -- global settings -----------------------------------------------------------
 
 _datadir = '.'
+_ipars = None
+_freefit = False
+_altfit = False
+
 
 def setdatadir(dir):
     global _datadir
     _datadir = dir
 
-_freefit = False
+def setipars(lam=None, Ls=None):
+    global _ipars
+    if lam is None:
+        _ipars = None
+    else:
+        _ipars = (lam, Ls)
 
 def setfreefit(freefit=True):
     global _freefit
     _freefit = freefit
+
+def setaltfit(altfit=True):
+    global _altfit
+    _altfit = altfit
 
 
 # -- raw data reading ----------------------------------------------------------
@@ -273,7 +286,7 @@ class MiezeData(object):
                  ipars=None, resolution=None):
         self.name = name
         self.unit = unit
-        self.ipars = ipars
+        self.ipars = ipars or _ipars
         self.variable = variable
         self.var_norm = var_norm
         self.var_back = var_back
@@ -347,6 +360,14 @@ class MiezeData(object):
             print 'Warning: no points read from file', file
 
     def process_point(self, point):
+        if _altfit:
+            from miezfit import mieze_fit
+            info = read_single(point['singlefile'])
+            if point['setting'] == '200_300':
+                p, e = mieze_fit(info[3], addup=True)
+                for n in ('A', 'B', 'C', 'phi'):
+                    point[n] = p[n]
+                    point['delta '+n] = e[n]
         return point
 
     def read_data(self, file, varvalue=None, vals=None, ipars=None, group=None):
@@ -366,7 +387,6 @@ class MiezeData(object):
 
     def remove(self, varvalue, tau=None):
         if tau is None:
-            #[]
             try:
                 del self.mess[varvalue]
             except KeyError:
@@ -429,16 +449,7 @@ class MiezeData(object):
         return plot.plot_data(**kwds)
 
 
-class MiezeDataNF(MiezeData):
-    def process_point(self, point):
-        from miezfit import mieze_fit
-        info = read_single(point['singlefile'])
-        if point['setting'] == '200_300':
-            p, e = mieze_fit(info[3], addup=True)
-            for n in ('A', 'B', 'C', 'phi'):
-                point[n] = p[n]
-                point['delta '+n] = e[n]
-        return point
+MiezeDataNF = MiezeData
 
 
 if __name__ == '__main__':

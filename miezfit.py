@@ -192,8 +192,14 @@ class Fit(object):
             except TypeError:
                 return self.result(name, None, xn, yn, dyn, None, None)
             if out[1] <= 4:
-                return self.result(name, 'leastsq', xn, yn, dyn, out[0],
-                                   parerrors=[0]*len(out[0]))
+                if isinstance(out[0], float):
+                    parerrors = [0]
+                    parvalues = [out[0]]
+                else:
+                    parerrors = [0]*len(out[0])
+                    parvalues = out[0]
+                return self.result(name, 'leastsq', xn, yn, dyn, parvalues,
+                                   parerrors=parerrors)
             else:
                 return self.result(name, None, xn, yn, dyn, None, None)
 

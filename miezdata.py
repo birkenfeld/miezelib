@@ -9,7 +9,6 @@
     :license: BSD.
 """
 
-import os
 import re
 import sys
 import copy
@@ -29,7 +28,7 @@ _datadir = '.'
 _ipars = None
 _freefit = False
 _altfit = True
-
+_flatback = False
 
 def setdatadir(dir):
     global _datadir
@@ -50,6 +49,9 @@ def setaltfit(altfit=True):
     global _altfit
     _altfit = altfit
 
+def setflatback(flatback=True):
+    global _flatback
+    _flatback = flatback
 
 # -- raw data reading ----------------------------------------------------------
 
@@ -195,11 +197,15 @@ class MiezeMeasurement(object):
         if bkgrd:
             #bkgrd['delta A'] = 0
             #bkgrd['delta B'] = 0
-            a -= bkgrd['A'] * cf
+            if not _flatback:
+               a -= bkgrd['A'] * cf
             b -= bkgrd['B'] * cf
             c = a/b
             #print point['delta A'], bkgrd['delta A']*cf
-            da = point['delta A'] + bkgrd['delta A']*cf
+            if not _flatback:
+                da = point['delta A'] + bkgrd['delta A']*cf
+            else:
+                da = point['delta A']
             db = point['delta B'] + bkgrd['delta B']*cf
             dc = c * (da/a + db/b)
         if graph:
@@ -207,10 +213,14 @@ class MiezeMeasurement(object):
             gdc = graph['delta C']
             gc = ga/gb
             if bkgrd:
-                ga -= bkgrd['A'] * cfg
+                if not _flatback:
+                    ga -= bkgrd['A'] * cfg
                 gb -= bkgrd['B'] * cfg
                 gc = ga/gb
-                gda = graph['delta A'] + bkgrd['delta A']*cfg
+                if not _flatback:
+                    gda = graph['delta A'] + bkgrd['delta A']*cfg
+                else:
+                    gda = graph['delta A']
                 gdb = graph['delta B'] + bkgrd['delta B']*cfg
                 gdc = gc * (gda/ga + gdb/gb)
             dc = (c/gc)*(dc/c + gdc/gc)

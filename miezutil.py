@@ -31,7 +31,7 @@ def setnoplot(np=True):
 
 def cmdline():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'ndfxNDFX')
+        opts, args = getopt.getopt(sys.argv[1:], 'ndfxbNDFXB')
     except getopt.error:
         print 'Invalid options given.'
         sys.exit(1)
@@ -56,6 +56,12 @@ def cmdline():
         elif opt == '-X':
             from miezdata import setaltfit
             setaltfit(False)
+        elif opt == '-b':
+            from miezdata import setflatback
+            setflatback(True)
+        elif opt == '-B':
+            from miezdata import setflatback
+            setflatback(False)
     sys.argv[1:] = args
 
 

@@ -16,9 +16,11 @@ import miezdata, miezfit, miezutil, miezplot
 
 ml_setdatadir = miezdata.setdatadir
 ml_setfreefit = miezdata.setfreefit
+ml_setaltfit = miezdata.setaltfit
 ml_setipars = miezdata.setipars
 ml_setdebug = miezutil.setdebug
 ml_setnoplot = ml_noplot = miezutil.setnoplot
+ml_setflatback = miezdata.setflatback
 ml_cmdline = miezutil.cmdline
 ml_mieze_time = miezutil.mieze_time
 ml_figure = miezplot.figure
@@ -33,4 +35,5 @@ pl = miezplot.pl
 __all__ = ['MiezeData', 'MiezeDataNF', 'Fit', 'np', 'sp', 'pl',
            'ml_mieze_time', 'ml_setdebug', 'ml_setdatadir', 'ml_figure',
            'ml_gammaplot', 'ml_show', 'ml_setnoplot', 'ml_setfreefit',
-           'ml_setipars', 'ml_noplot', 'ml_cmdline']
+           'ml_setaltfit', 'ml_setflatback', 'ml_setipars', 'ml_noplot',
+           'ml_cmdline']

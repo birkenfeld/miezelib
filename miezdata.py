@@ -445,11 +445,19 @@ class MiezeData(object):
             measurement = MiezeMeasurement(self, ycol, varvalue)
             for x, point in self._data[varvalue].items():
                 if self.var_norm:
-                    graph = self._norm[varvalue].get(x)
+                    gpoint = self._norm.get(varvalue)
+                    if gpoint:
+                        graph = gpoint.get(x)
+                    else:
+                        graph = None
                 else:
                     graph = self._norm.get(x)
                 if self.var_back:
-                    bkgrd = self._back[varvalue].get(x)
+                    bpoint = self._back.get(varvalue)
+                    if bpoint:
+                        bkgrd = bpoint.get(x)
+                    else:
+                        bkgrd = None
                 else:
                     bkgrd = self._back.get(x)
                 files = self._filenames(point, graph, bkgrd)

@@ -472,6 +472,30 @@ class MiezeData(object):
         plot = MiezeDataPlot(self)
         return plot.plot_data(**kwds)
 
+    def save(self, filename, **kwds):
+        def mangle_filenames(f):
+            ddir = _datadir
+            if not ddir.endswith('/'):
+                ddir += '/'
+            return (f[0][len(ddir):] or 'none',
+                    f[1][len(ddir):] or 'none',
+                    f[2][len(ddir):] or 'none')
+        data = self.get_data(**kwds)
+        f = open(filename, 'w')
+        try:
+            f.write('# MIEZE measurement data: %s\n' % self.name)
+            f.write('# Columns are: tau, C, delta C\n\n')
+            for measurement in data:
+                f.write('# Measurement at %s = %s %s\n' %
+                        (self.variable, measurement.varvalue, self.unit))
+                for point in sorted(measurement.points):
+                    f.write('# data %s, norm %s, back %s\n' %
+                            mangle_filenames(point[3]))
+                    f.write('%.1f\t%.4f\t%.4f\n' % point[:3])
+                f.write('\n')
+        finally:
+            f.close()
+
 
 MiezeDataNF = MiezeData
 

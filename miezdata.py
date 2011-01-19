@@ -387,6 +387,8 @@ class MiezeData(object):
         return point
 
     def read_data(self, file, varvalue=None, vals=None, ipars=None, group=None):
+        if file is None:
+            return
         self.read_file(file, self._data, True, varvalue, vals, None,
                        ipars, group)
         dprint('read file', file, 'as data')
@@ -394,6 +396,8 @@ class MiezeData(object):
     data = read_data
 
     def read_norm(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
+        if file is None:
+            return
         self.read_file(file, self._norm, self.var_norm, varvalue, None,
                        onlyval, ipars, group)
         dprint('read file', file, 'as normalization')
@@ -401,6 +405,8 @@ class MiezeData(object):
     norm = read_norm
 
     def read_back(self, file, varvalue=None, onlyval=None, ipars=None, group=None):
+        if file is None:
+            return
         self.read_file(file, self._back, self.var_back, varvalue, None,
                        onlyval, ipars, group)
         dprint('read file', file, 'as background')

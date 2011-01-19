@@ -274,6 +274,7 @@ class MiezeMeasurement(object):
         return res
 
     def _freefit_model(self, v, x):
+        #return v[1] * np.exp(-abs(v[0])*x/658.2) + (1 - v[1])
         return v[1] * np.exp(-abs(v[0])*x/658.2)
 
     def freefit(self, name=None, **kwds):
@@ -370,6 +371,7 @@ class MiezeData(object):
                         continue
                 dct[point['tau']] = point
                 nread += 1
+        #print 'dict is now', dct
         if not nread:
             print 'Warning: no points read from file', file
 
@@ -500,7 +502,7 @@ class MiezeData(object):
         finally:
             f.close()
 
-
+# backwards compatibility
 MiezeDataNF = MiezeData
 
 

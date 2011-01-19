@@ -93,7 +93,7 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
               xlabel=None, xtransform=None, ylims=None, xlim=None, bottom=None,
               logscale=False, seclogscale=False, xlogscale=False, threesigma=False,
               top=None, left=None, right=None, wspace=None, hspace=None,
-              legend=False, subplots=True, lefttitle=False):
+              legend=False, subplots=True, lefttitle=False, datafile=None):
     """Create a plot of Gamma versus variable quantity."""
     from miezfit import Fit
 
@@ -147,6 +147,8 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
     ax = None
     twax = None
 
+    data_array = []
+
     for j, (meass, title, fit) in enumerate(zip(data, titles, fits)):
         if title is None:
             title = meass[0].data.name
@@ -169,21 +171,45 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
 
         # primary data: Gamma
         x, y, dy = [], [], []
+        ex, ey, edy = [], [], []
+        allx, ally, alldy = [], [], []
         for meas in meass:
+            vx = vy = vdy = None
             if meas.fitvalues is not None:
-                x.append(meas.varvalue)
-                y.append(meas.fitvalues[0])
-                dy.append(meas.fitvalues[1])
+                vx = meas.varvalue
+                vy = meas.fitvalues[0]
+                vdy = meas.fitvalues[1]
             else:
                 res = meas.fit()
                 if res:
-                    x.append(meas.varvalue)
-                    y.append(res.Gamma)
-                    dy.append(res.dGamma)
+                    vx = meas.varvalue
+                    vy = res.Gamma
+                    vdy = res.dGamma
+            if vx is not None:
+                if 0 <= vy <= 5 and 0 <= vdy <= max(vy/2, 0.15):
+                    x.append(vx)
+                    y.append(vy)
+                    dy.append(vdy)
+                else:
+                    ex.append(vx)
+                    ey.append(0.05)
+                    edy.append(0)
+                allx.append(vx)
+                ally.append(vy)
+                alldy.append(vdy)
         if critical:
             x = map(lambda v: v - critical, x)
+            ex = map(lambda v: v - critical, ex)
         if xtransform:
-            x = map(xtransform, x)
+            if isinstance(xtransform, list):
+                trf = xtransform[j]
+            else:
+                trf = xtransform
+            x = map(trf, x)
+            ex = map(trf, ex)
+            allx = map(trf, allx)
+
+        data_array.append((title, allx, ally, alldy))
 
         color = cycle1.next()
         if len(x):
@@ -193,6 +219,8 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
                 ndy = dy
             ax.errorbar(x, y, ndy, color=color, marker='o', ls='',
                         label=mktitle(title) + ' (linewidth)')
+            if ex:
+                ax.errorbar(ex, ey, color='black', marker='*', ls='')
 
         if logscale:
             ax.set_yscale('log')
@@ -226,7 +254,11 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
                 if critical:
                     tx = map(lambda v: v - critical, tx)
                 if xtransform:
-                    tx = map(xtransform, tx)
+                    if isinstance(xtransform, list):
+                        trf = xtransform[j]
+                    else:
+                        trf = xtransform
+                    tx = map(trf, tx)
                 color = cycle2.next()
                 if secspline and len(tx) > 3:
                     twax.errorbar(tx, ty, tdy, fmt=color+'h')
@@ -242,8 +274,12 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
                     twax.set_yscale('log')
                 twaxes.append(twax)
                 twylimits.append(twax.get_ylim())
+                data_array.append((None, tx, ty, tdy))
+            else:
+                data_array.append(None)
         else:
             ax.axhline(y=0, color='#cccccc')
+            data_array.append(None)
 
         if xlogscale:
             ax.set_xscale('log')
@@ -252,13 +288,15 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
         if xlim:
             ax.set_xlim(xlim)
         else:
+            xmin = min(x + ex)
+            xmax = max(x + ex)
             try:
                 lspace = abs(x[0]-x[1])/2
                 rspace = abs(x[-1]-x[-2])/2
             except IndexError:
-                ax.set_xlim(x[0]-0.1, x[-1]+0.1)
+                ax.set_xlim(xmin-0.1, xmax+0.1)
             else:
-                ax.set_xlim(x[0]-lspace, x[-1]+rspace)
+                ax.set_xlim(xmin-lspace, xmax+rspace)
         if xlabel is not None:
             ax.set_xlabel(mklabel(xlabel), size=textsize)
         elif critical:
@@ -343,6 +381,20 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
     if filename is not None:
         fig.savefig(filename)
         dprint('Wrote', title or 'gammaplot', 'to', filename)
+
+    if datafile is not None:
+        f = open(datafile, 'w')
+        for item in data_array:
+            if not item: continue
+            title, x, y, dy = item
+            if title:
+                f.write('# MIEZE measurement %s\n' % (title,))
+            else:
+                f.write('# Secondary data\n')
+            for w in zip(x, y, dy):
+                f.write('%.4f\t%.4f\t%.6f\n' % w)
+            f.write('\n\n')
+        f.close()
 
     return axes, twaxes, fitresults
 
@@ -520,8 +572,9 @@ class MiezeDataPlot(object):
             if res.Gamma > 0:
                 ax.text(0.03, 0.03, text, size='large', transform=ax.transAxes)
             if log:
-                ax.set_yscale('log')
-                ax.set_ylim(ymin=1e-1, ymax=2)
+                #ax.set_yscale('log')
+                #ax.set_ylim(ymin=1e-1, ymax=2)
+                ax.set_xscale('log')
             else:
                 ax.set_ylim(ymin=0)
         return data

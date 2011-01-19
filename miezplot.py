@@ -23,6 +23,7 @@ try:
     import matplotlib.pyplot as pl
 except ImportError:
     import pylab as pl
+from mpl_toolkits.axes_grid import AxesGrid
 
 from miezdata import read_single, MiezeData
 from miezutil import dprint, format_tex
@@ -314,7 +315,6 @@ def gammaplot(data, titles=None, figsize=None, textsize='x-large', ticksize=None
             ax.set_ylabel('$\\Delta\\Gamma\\,[\\mu\\mathrm{eV}]$', size=textsize)
             if twax:
                 twax.set_ylabel(seclabel, size=textsize)
-                
 
     # make the Y scale equal for all plots
     def _scale_equal(axes, ylimits):
@@ -394,7 +394,8 @@ def miezeplot(filenames, infos):
                      r'$C = %.2f \pm %.2f$, ' % (C, dC) +
                      r'$A = %.2f \pm %.2f$, ' % (A, dA) +
                      r'$B = %.2f \pm %.2f$, ' % (B, dB) +
-                     r'$\Sigma = %s$, $t = %s$' % (sum(counts), preset))
+                     r'$\Sigma = %s$, $t = %s$, ' % (sum(counts), preset) +
+                     r'$%.2f\ \rm cps$' % (sum(counts)/float(preset)))
         ax.set_ylabel('counts')
         ax.errorbar(np.arange(1, 17), counts, np.sqrt(counts), fmt='ro')
 

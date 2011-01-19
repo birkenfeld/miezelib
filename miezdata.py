@@ -74,7 +74,7 @@ def read_summary(fn):
             m.append(map(try_float, line.split()))
     return m, c
 
-pm_re = re.compile(r'([0-9e.]+)\s+\+/-\s+([0-9e.]+)')
+pm_re = re.compile(r'-?([0-9e.]+)\s+\+/-\s+([0-9e.]+)')
 vv_re = re.compile(r'# ([a-zA-Z0-9_]+)\s+is at\s+([0-9e.]+)')
 
 _single_cache = {}

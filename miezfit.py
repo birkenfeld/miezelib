@@ -181,7 +181,7 @@ class Fit(object):
         odr = ODR(data, Model(self.model), beta0=self.parstart,
                   ifixx=array([0]*len(xn)))
         out = odr.run()
-        if 1 <= out.info <= 3:
+        if 1:# 1 <= out.info <= 3:
             return self.result(name, 'ODR', xn, yn, dyn, out.beta, out.sd_beta)
         else:
             # if it doesn't converge, try leastsq (doesn't consider errors)

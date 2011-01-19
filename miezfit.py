@@ -5,7 +5,7 @@
 
     Fitting routines for general and MIEZE data.
 
-    :copyright: 2008-2009 by Georg Brandl.
+    :copyright: 2008-2010 by Georg Brandl.
     :license: BSD.
 """
 
@@ -130,13 +130,13 @@ class FitResult(object):
 
     def __str__(self):
         if self._failed:
-            return 'Fit %-20s failed' % self._name
+            return 'Fit %-35s failed' % self._name
         elif self._method == 'ODR':
-            return 'Fit %-20s success (  ODR  ), chi2: %8.3g, params: %s' % (
+            return 'Fit %-35s success (  ODR  ), chi2: %8.3g, params: %s' % (
                 self._name or '', self.chi2,
                 ', '.join('%s = %8.3g +/- %8.3g' % v for v in zip(*self._pars)))
         else:
-            return 'Fit %-20s success (leastsq), chi2: %8.3g, params: %s' % (
+            return 'Fit %-35s success (leastsq), chi2: %8.3g, params: %s' % (
                 self._name or '', self.chi2,
                 ', '.join('%s = %8.3g' % v[:2] for v in zip(*self._pars)))
 

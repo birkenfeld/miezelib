@@ -147,7 +147,11 @@ class MiezeMeasurement(object):
         return '<MIEZE measurement at %s, ycol %s>' % (self.varvalue, self.ycol)
 
     def add_point(self, x, point, graph, bkgrd, files):
-        y, dy = self._calc_point(point, graph, bkgrd)
+        try:
+            y, dy = self._calc_point(point, graph, bkgrd)
+        except Exception, err:
+            print "Error:", err
+            y, dy = 0, 0
         self.points.append((x, y, dy, files, point.get('group')))
 
     def _calc_point_sum(self, point, graph, bkgrd):
